@@ -48,8 +48,11 @@
     {
       "group": "Lomen Chat",
       "pages": [
-        "lomen-chat/what-is-chat",
-        "lomen-chat/moc-implementation-of-models"
+        "lomen-chat/introduction",
+        "lomen-chat/getting-started",
+        "lomen-chat/best-practices",
+        "lomen-chat/supported-chains",
+        "lomen-chat/faq"
       ]
     },
     {
