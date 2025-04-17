@@ -54,7 +54,13 @@
     },
     {
       "group": "yMCP",
-      "pages": ["ymcp/introduction", "ymcp/running-mcp-server"]
+      "pages": [
+        "ymcp/introduction",
+        "ymcp/getting-started",
+        "ymcp/using-with-clients",
+        "ymcp/api-key-management",
+        "ymcp/faq"
+      ]
     },
     {
       "group": "Lomen Hub",
