@@ -3,9 +3,9 @@
   "theme": "maple",
   "name": "Lomen AI",
   "colors": {
-    "primary": "#0D9373",
-    "light": "#07C983",
-    "dark": "#0D9373"
+    "primary": "#2563EB",
+    "light": "#05B9F2",
+    "dark": "#2563EB"
   },
   "favicon": "/favicon.svg",
   "navigation": {
@@ -16,11 +16,7 @@
         "groups": [
           {
             "group": "Lomen AI",
-            "pages": [
-              "lomen-ai/what-is-lomen",
-              "lomen-ai/roadmap",
-              "lomen-ai/changelog"
-            ]
+            "pages": ["what-is-lomen", "lomen-ai/roadmap", "lomen-ai/changelog"]
           },
           {
             "group": "Lomen Chat",
