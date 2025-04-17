@@ -1,9 +1,9 @@
 {
   "$schema": "https://mintlify.com/schema.json",
-  "name": "Starter Kit",
+  "name": "Lomen AI",
   "logo": {
-    "dark": "/logo/dark.svg",
-    "light": "/logo/light.svg"
+    "dark": "/logo/lomen-dark.svg",
+    "light": "/logo/lomen-light.svg"
   },
   "favicon": "/favicon.svg",
   "colors": {
@@ -15,72 +15,79 @@
       "to": "#07C983"
     }
   },
-  "topbarLinks": [
-    {
-      "name": "Support",
-      "url": "mailto:hi@mintlify.com"
-    }
-  ],
   "topbarCtaButton": {
-    "name": "Dashboard",
-    "url": "https://dashboard.mintlify.com"
+    "name": "Try Lomen Chat",
+    "url": "https://chat.lomen.org"
   },
-  "tabs": [
-    {
-      "name": "API Reference",
-      "url": "api-reference"
-    }
-  ],
   "anchors": [
     {
-      "name": "Documentation",
-      "icon": "book-open-cover",
-      "url": "https://mintlify.com/docs"
+      "name": "Community",
+      "icon": "telegram",
+      "url": "https://t.me/lomen_ai"
     },
     {
-      "name": "Community",
-      "icon": "slack",
-      "url": "https://mintlify.com/community"
+      "name": "X",
+      "icon": "x",
+      "url": "https://x.com/lomen_org"
     },
     {
       "name": "Blog",
       "icon": "newspaper",
-      "url": "https://mintlify.com/blog"
+      "url": "https://www.lomen.org/blog"
     }
   ],
   "navigation": [
     {
-      "group": "Get Started",
+      "group": "Lomen AI",
       "pages": [
-        "introduction",
-        "quickstart",
-        "development"
+        "lomen-ai/what-is-lomen",
+        "lomen-ai/roadmap",
+        "lomen-ai/changelog"
       ]
     },
     {
-      "group": "Essentials",
+      "group": "Lomen Chat",
       "pages": [
-        "essentials/markdown",
-        "essentials/code",
-        "essentials/images",
-        "essentials/settings",
-        "essentials/navigation",
-        "essentials/reusable-snippets"
+        "lomen-chat/what-is-chat",
+        "lomen-chat/moc-implementation-of-models"
       ]
     },
     {
-      "group": "API Documentation",
+      "group": "yMCP",
+      "pages": ["ymcp/introduction", "ymcp/running-mcp-server"]
+    },
+    {
+      "group": "Lomen Hub",
       "pages": [
-        "api-reference/introduction"
+        "lomen-hub/introduction",
+        "lomen-hub/core-concepts",
+        {
+          "group": "Datasets",
+          "pages": [
+            "lomen-hub/datasets/overview",
+            "lomen-hub/datasets/accessing-data",
+            "lomen-hub/datasets/contributing-data"
+          ]
+        },
+        {
+          "group": "Models",
+          "pages": [
+            "lomen-hub/models/introduction",
+            "lomen-hub/models/using-hub-data",
+            "lomen-hub/models/future-integrations"
+          ]
+        },
+        "lomen-hub/use-cases",
+        "lomen-hub/faq"
       ]
     },
     {
-      "group": "Endpoint Examples",
-      "pages": [
-        "api-reference/endpoint/get",
-        "api-reference/endpoint/create",
-        "api-reference/endpoint/delete"
-      ]
+      "group": "Lomen Engine",
+      "pages": ["lomen-engine/introduction"]
+    },
+    {
+      "group": "Lomen AI Dev Tooling",
+      "pages": ["lomen-dev-tooling/introduction"]
     }
   ],
   "footerSocials": {
