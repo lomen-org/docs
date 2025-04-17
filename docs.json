@@ -8,6 +8,14 @@
     "dark": "#2563EB"
   },
   "favicon": "/favicon.svg",
+  "seo": {
+    "indexing": "all"
+  },
+  "integrations": {
+    "ga4": {
+      "measurementId": "G-GDY7882MCE"
+    }
+  },
   "navigation": {
     "anchors": [
       {
