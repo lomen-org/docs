@@ -24,7 +24,7 @@
         "groups": [
           {
             "group": "Lomen AI",
-            "pages": ["what-is-lomen", "lomen-ai/roadmap", "lomen-ai/changelog"]
+            "pages": ["what-is-lomen"]
           },
           {
             "group": "Lomen Chat",
@@ -34,16 +34,6 @@
               "lomen-chat/best-practices",
               "lomen-chat/supported-chains",
               "lomen-chat/faq"
-            ]
-          },
-          {
-            "group": "yMCP",
-            "pages": [
-              "ymcp/introduction",
-              "ymcp/getting-started",
-              "ymcp/using-with-clients",
-              "ymcp/api-key-management",
-              "ymcp/faq"
             ]
           },
           {
