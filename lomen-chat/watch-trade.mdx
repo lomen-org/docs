@@ -1,0 +1,77 @@
+---
+title: "Watch Trade"
+icon: "eye"
+description: "Watch trade with Lomen Chat."
+mode: "center"
+---
+
+# Watch Trade with Lomen
+
+Watch trade allows you to monitor and receive notifications when specific wallet addresses perform transactions. This feature is perfect for tracking successful traders or whale wallets and staying informed about their market moves.
+
+## How to Set Up Watch Trade
+
+### 1. Create a Group
+
+First, create a group of addresses you want to track:
+
+- **Using the UI**: Navigate to the Groups section and select "Create New Group"
+- **Using a Prompt**: Type `create group millionaires` (replace "millionaires" with your desired group name)
+
+### 2. Add Addresses to Your Group
+
+Add wallet addresses to monitor:
+
+- **Using the UI**: Select your group and click "Add Address"
+- **Using a Prompt**: Type `add 0x123...abc to millionaires` (replace with actual addresses)
+
+### 3. Configure Watch Trade Settings
+
+Set up notifications for specific transaction types:
+
+- **Transfer**: Get notified when addresses transfer tokens
+- **Buy**: Get notified when addresses purchase tokens
+- **Sell**: Get notified when addresses sell tokens
+
+### 4. Set Up Notifications
+
+Use prompts to create notification rules with conditions:
+
+```
+setup watchtrade If anyone from millionaires transfer > $10, notify me
+```
+
+```
+setup watchtrade If anyone from millionaires sell < $10, notify me
+```
+
+## Notification Delivery
+
+When your conditions are triggered, you'll receive notifications:
+
+- **Platform Notifications**: Directly within the Lomen app
+- **Telegram Notifications**: Connected to your Telegram account
+
+## Examples
+
+### Track Large Transfers
+
+```
+setup watchtrade If anyone from whales transfer > $50000, notify me
+```
+
+### Monitor Token Purchases
+
+```
+setup watchtrade If anyone from successful_traders buy ETH > $1000, notify me
+```
+
+### Follow Selling Activity
+
+```
+setup watchtrade If anyone from my_watchlist sell any token, notify me
+```
+
+## Support
+
+Join [our community](https://t.me/lomen_ai) for help with setting up watch trade or to share feedback. Lomen is constantly improving based on user input.
