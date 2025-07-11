@@ -24,7 +24,7 @@
         "groups": [
           {
             "group": "Lomen AI",
-            "pages": ["what-is-lomen", "lomen-ai/roadmap", "lomen-ai/changelog"]
+            "pages": ["what-is-lomen"]
           },
           {
             "group": "Lomen App",
