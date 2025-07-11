@@ -27,14 +27,21 @@
             "pages": ["what-is-lomen"]
           },
           {
-            "group": "Lomen Chat",
+            "group": "Lomen App",
             "pages": [
-              "lomen-chat/introduction",
-              "lomen-chat/getting-started",
-              "lomen-chat/best-practices",
-              "lomen-chat/supported-chains",
-              "lomen-chat/watch-trade",
-              "lomen-chat/faq"
+              "lomen-app/introduction",
+              "lomen-app/getting-started",
+              "lomen-app/how-to-fund-wallet",
+              "lomen-app/best-practices",
+              "lomen-app/supported-chains",
+              "lomen-app/faq",
+              {
+                "group": "Resources",
+                "pages": [
+                  "lomen-app/rebalance-portfolio",
+                  "lomen-app/arbitrage"
+                ]
+              }
             ]
           },
           {
@@ -100,15 +107,15 @@
   "navbar": {
     "primary": {
       "type": "button",
-      "label": "Try Lomen Chat",
-      "href": "https://chat.lomen.org"
+      "label": "Try Lomen App",
+      "href": "https://app.lomen.org"
     }
   },
   "footer": {
     "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
+      "x": "https://x.com/lomen_org",
+      "github": "https://github.com/lomen-org",
+      "telegram": "https://t.me/lomen_ai"
     }
   }
 }
