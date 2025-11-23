@@ -23,55 +23,18 @@
         "icon": "book-open",
         "groups": [
           {
-            "group": "Lomen AI",
-            "pages": ["what-is-lomen"]
-          },
-          {
             "group": "Lomen App",
             "pages": [
               "lomen-app/introduction",
               "lomen-app/getting-started",
-              "lomen-app/how-to-fund-wallet",
-              "lomen-app/best-practices",
-              "lomen-app/supported-chains",
               "lomen-app/faq",
               {
                 "group": "Resources",
                 "pages": [
-                  "lomen-app/rebalance-portfolio",
-                  "lomen-app/arbitrage"
+                  "lomen-app/rebalance-portfolio"
                 ]
               }
             ]
-          },
-          {
-            "group": "Lomen Hub",
-            "pages": [
-              "lomen-hub/introduction",
-              "lomen-hub/core-concepts",
-              {
-                "group": "Datasets",
-                "pages": [
-                  "lomen-hub/datasets/overview",
-                  "lomen-hub/datasets/accessing-data",
-                  "lomen-hub/datasets/contributing-data"
-                ]
-              },
-              {
-                "group": "Models",
-                "pages": [
-                  "lomen-hub/models/introduction",
-                  "lomen-hub/models/using-hub-data",
-                  "lomen-hub/models/future-integrations"
-                ]
-              },
-              "lomen-hub/use-cases",
-              "lomen-hub/faq"
-            ]
-          },
-          {
-            "group": "Lomen Engine",
-            "pages": ["lomen-engine/introduction"]
           },
           {
             "group": "Lomen AI Dev Tooling",
