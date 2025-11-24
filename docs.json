@@ -24,11 +24,7 @@
         "groups": [
           {
             "group": "Lomen App",
-            "pages": [
-              "lomen-app/introduction",
-              "lomen-app/getting-started",
-              "lomen-app/faq"
-            ]
+            "pages": ["lomen-app/getting-started", "lomen-app/faq"]
           },
           {
             "group": "Core Concepts",
