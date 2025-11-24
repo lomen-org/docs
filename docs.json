@@ -31,8 +31,19 @@
             ]
           },
           {
+            "group": "Core Concepts",
+            "pages": [
+              "lomen-app/core-concepts/baskets",
+              "lomen-app/ai/discovery",
+              "lomen-app/strategies/overview"
+            ]
+          },
+          {
             "group": "Resources",
-            "pages": ["lomen-app/rebalance-portfolio"]
+            "pages": [
+              "lomen-app/security/self-custody",
+              "lomen-app/rebalancing"
+            ]
           },
           {
             "group": "Dev Tooling",
