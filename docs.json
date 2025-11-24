@@ -27,18 +27,16 @@
             "pages": [
               "lomen-app/introduction",
               "lomen-app/getting-started",
-              "lomen-app/faq",
-              {
-                "group": "Resources",
-                "pages": [
-                  "lomen-app/rebalance-portfolio"
-                ]
-              }
+              "lomen-app/faq"
             ]
           },
           {
-            "group": "Lomen AI Dev Tooling",
-            "pages": ["lomen-dev-tooling/introduction"]
+            "group": "Resources",
+            "pages": ["lomen-app/rebalance-portfolio"]
+          },
+          {
+            "group": "Dev Tooling",
+            "pages": ["dev-tooling/introduction"]
           }
         ]
       }
