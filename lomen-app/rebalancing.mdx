@@ -29,29 +29,14 @@ Regular rebalancing can help capture gains and reinvest in underperforming asset
 
 ## How Rebalancing Works
 
-```
-┌─────────────────────────────────┐
-│  Current Allocation             │
-│  • Asset A: 40% (target: 30%)  │
-│  • Asset B: 20% (target: 30%)  │
-│  • Asset C: 40% (target: 40%)  │
-└──────────────┬──────────────────┘
-               │
-               ▼
-┌─────────────────────────────────┐
-│  Rebalancing Action             │
-│  • Sell 10% of Asset A          │
-│  • Buy 10% more of Asset B      │
-│  • Keep Asset C unchanged        │
-└──────────────┬──────────────────┘
-               │
-               ▼
-┌─────────────────────────────────┐
-│  Rebalanced Allocation           │
-│  • Asset A: 30% ✓               │
-│  • Asset B: 30% ✓               │
-│  • Asset C: 40% ✓               │
-└─────────────────────────────────┘
+```mermaid
+flowchart TD
+    A["Current Allocation\nAsset A: 40% (target: 30%)\nAsset B: 20% (target: 30%)\nAsset C: 40% (target: 40%)"] --> B["Rebalancing Action\nSell 10% of Asset A\nBuy 10% more of Asset B\nKeep Asset C unchanged"]
+    B --> C["Rebalanced Allocation\nAsset A: 30% ✓\nAsset B: 30% ✓\nAsset C: 40% ✓"]
+
+    style A fill:#2563EB,stroke:#05B9F2,stroke-width:2px,color:#fff
+    style B fill:#2563EB,stroke:#05B9F2,stroke-width:2px,color:#fff
+    style C fill:#2563EB,stroke:#05B9F2,stroke-width:2px,color:#fff
 ```
 
 ## When Rebalancing Triggers

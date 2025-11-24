@@ -55,18 +55,13 @@
     "global": {
       "anchors": [
         {
-          "anchor": "Community",
-          "href": "https://t.me/lomen_ai",
-          "icon": "telegram"
-        },
-        {
           "anchor": "X",
-          "href": "https://x.com/lomen_org",
+          "href": "https://x.com/getlomen",
           "icon": "x"
         },
         {
           "anchor": "Blog",
-          "href": "https://www.lomen.org/blog",
+          "href": "https://getlomen.com/blog",
           "icon": "newspaper"
         }
       ]

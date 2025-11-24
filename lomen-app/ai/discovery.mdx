@@ -34,29 +34,14 @@ Our discovery engine monitors and evaluates:
 
 ## The Discovery Process
 
-```
-┌─────────────────────────────────────┐
-│  1. Data Collection                 │
-│     • Protocol data                 │
-│     • Market conditions             │
-│     • User portfolio                │
-└──────────────┬──────────────────────┘
-               │
-               ▼
-┌─────────────────────────────────────┐
-│  2. Strategy Analysis               │
-│     • Yield opportunities            │
-│     • Risk assessment                │
-│     • Compatibility check            │
-└──────────────┬──────────────────────┘
-               │
-               ▼
-┌─────────────────────────────────────┐
-│  3. Recommendation                  │
-│     • Personalized suggestions       │
-│     • Strategy ranking              │
-│     • Clear explanations            │
-└─────────────────────────────────────┘
+```mermaid
+flowchart TD
+    A["1. Data Collection\nProtocol data, Market conditions, User portfolio"] --> B["2. Strategy Analysis\nYield opportunities, Risk assessment, Compatibility check"]
+    B --> C["3. Recommendation\nPersonalized suggestions, Strategy ranking, Clear explanations"]
+
+    style A fill:#2563EB,stroke:#05B9F2,stroke-width:2px,color:#fff
+    style B fill:#2563EB,stroke:#05B9F2,stroke-width:2px,color:#fff
+    style C fill:#2563EB,stroke:#05B9F2,stroke-width:2px,color:#fff
 ```
 
 ## Benefits of AI Discovery

@@ -43,16 +43,30 @@ A basket can contain:
 
 ## Basket Structure
 
-```
-┌─────────────────────────────────┐
-│         Your Basket             │
-├─────────────────────────────────┤
-│  Asset 1 → Protocol A          │
-│  Asset 2 → Protocol B           │
-│  Asset 3 → Multi-protocol       │
-│         Strategy                │
-│  ...                            │
-└─────────────────────────────────┘
+```mermaid
+graph TB
+    Basket["Your Basket"]
+    Asset1["Asset 1"]
+    Asset2["Asset 2"]
+    Asset3["Asset 3"]
+    ProtocolA["Protocol A"]
+    ProtocolB["Protocol B"]
+    MultiProtocol["Multi-protocol Strategy"]
+
+    Basket --> Asset1
+    Basket --> Asset2
+    Basket --> Asset3
+    Asset1 --> ProtocolA
+    Asset2 --> ProtocolB
+    Asset3 --> MultiProtocol
+
+    style Basket fill:#2563EB,stroke:#05B9F2,stroke-width:3px,color:#fff
+    style Asset1 fill:#1e40af,stroke:#05B9F2,stroke-width:2px,color:#fff
+    style Asset2 fill:#1e40af,stroke:#05B9F2,stroke-width:2px,color:#fff
+    style Asset3 fill:#1e40af,stroke:#05B9F2,stroke-width:2px,color:#fff
+    style ProtocolA fill:#3b82f6,stroke:#05B9F2,stroke-width:2px,color:#fff
+    style ProtocolB fill:#3b82f6,stroke:#05B9F2,stroke-width:2px,color:#fff
+    style MultiProtocol fill:#3b82f6,stroke:#05B9F2,stroke-width:2px,color:#fff
 ```
 
 Each basket is designed around a specific investment theme or strategy. For example, a "Yield Optimizer" basket might combine high-yield opportunities across lending protocols, while a "Liquidity Provider" basket could manage LP positions across multiple DEXs.

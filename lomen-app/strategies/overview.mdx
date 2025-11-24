@@ -102,30 +102,16 @@ Multi-protocol strategies combine multiple DeFi actions across different protoco
 
 ## Strategy Execution Flow
 
-```
-┌─────────────────┐
-│  Select Basket  │
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│  Review Strategy│
-│  • Assets       │
-│  • Protocols    │
-│  • Risks        │
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│  One-Click      │
-│  Execution      │
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│  Monitor        │
-│  Performance    │
-└─────────────────┘
+```mermaid
+flowchart TD
+    A["Select Basket"] --> B["Review Strategy\nAssets, Protocols, Risks"]
+    B --> C["One-Click Execution"]
+    C --> D["Monitor Performance"]
+
+    style A fill:#2563EB,stroke:#05B9F2,stroke-width:2px,color:#fff
+    style B fill:#2563EB,stroke:#05B9F2,stroke-width:2px,color:#fff
+    style C fill:#2563EB,stroke:#05B9F2,stroke-width:2px,color:#fff
+    style D fill:#2563EB,stroke:#05B9F2,stroke-width:2px,color:#fff
 ```
 
 ## Choosing the Right Strategy

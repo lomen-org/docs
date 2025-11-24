@@ -18,19 +18,18 @@ When you use Lomen:
 3. **No deposits required**: We never hold your assets
 4. **Exit anytime**: You can withdraw or change strategies instantly
 
-```
-┌─────────────────────────────────┐
-│     Your Wallet                  │
-│  ┌───────────────────────────┐   │
-│  │  Your Assets              │   │
-│  │  • SOL                    │   │
-│  │  • USDC                   │   │
-│  │  • Other tokens           │   │
-│  └───────────────────────────┘   │
-│                                   │
-│  Lomen coordinates strategies     │
-│  but never takes custody          │
-└─────────────────────────────────┘
+```mermaid
+graph TB
+    Wallet["Your Wallet"]
+    Assets["Your Assets\nSOL, USDC, Other tokens"]
+    Lomen["Lomen coordinates strategies\nbut never takes custody"]
+
+    Wallet --> Assets
+    Wallet -.->|"coordinates only"| Lomen
+
+    style Wallet fill:#2563EB,stroke:#05B9F2,stroke-width:3px,color:#fff
+    style Assets fill:#1e40af,stroke:#05B9F2,stroke-width:2px,color:#fff
+    style Lomen fill:#3b82f6,stroke:#05B9F2,stroke-width:2px,color:#fff,stroke-dasharray: 5 5
 ```
 
 ## Security Guarantees
