@@ -3,9 +3,9 @@
   "theme": "maple",
   "name": "Lomen AI",
   "colors": {
-    "primary": "#2563EB",
+    "primary": "#00e6c5",
     "light": "#05B9F2",
-    "dark": "#2563EB"
+    "dark": "#00e6c5"
   },
   "favicon": "/favicon.svg",
   "seo": {
