@@ -71,12 +71,12 @@
     "primary": {
       "type": "button",
       "label": "Try Lomen App",
-      "href": "https://app.lomen.org"
+      "href": "https://app.getlomen.com"
     }
   },
   "footer": {
     "socials": {
-      "x": "https://x.com/lomen_org",
+      "x": "https://x.com/getlomen",
       "github": "https://github.com/lomen-org",
       "telegram": "https://t.me/lomen_ai"
     }
