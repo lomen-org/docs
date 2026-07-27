@@ -36,8 +36,8 @@ tell which path is yours before you write any code.
     split `prepare → sign → submit → poll` flow.
   </Card>
   <Card title="Cross-chain (EVM → Solana)" icon="right-left">
-    Users hold funds on Base / Monad / Ethereum. Map each user to a Solana wallet, bridge
-    into it, then open/close as normal on Solana.
+    Users hold funds on Base / Monad / Ethereum. Bridge USDC in with the SDK's native CCTP
+    bridging, then open/close as normal on Solana.
   </Card>
 </CardGroup>
 
@@ -128,16 +128,10 @@ Prepared transactions expire ~60s after `prepare`, and the wallet must sign them
 
 ## Cross-chain users (EVM to Solana)
 
-Some partners' users hold funds on **Base, Monad, or Ethereum**, not Solana. Cesto operates
-entirely on Solana and **does not run a bridge** — but you can still onboard these users by
-giving each one a Solana wallet, moving funds onto it, and then using any of the models
-above.
-
-<Warning>
-  **Cesto does not bridge funds.** Bridging from an EVM chain to Solana is done by you (or
-  your user) with a third-party bridge. Cesto's role starts once USDC lands on the Solana
-  wallet.
-</Warning>
+Some partners' users hold funds on **Base, Monad, or Ethereum**, not Solana. The SDK's
+[bridging resource](/sdk/bridging) moves their **USDC** onto Solana natively (Circle CCTP —
+the user signs one burn on the EVM chain, Cesto attests and mints on Solana) — no
+third-party bridge, no SOL needed on the destination.
 
 The pattern:
 
@@ -158,13 +152,14 @@ The pattern:
     ```
   </Step>
   <Step title="Bridge USDC into the SVM wallet">
-    You (or the user) bridge **USDC from the EVM chain to the Cesto SVM wallet address** with
-    a bridge of your choice. No SOL is needed — Cesto sponsors gas.
+    Use [`bridge`](/sdk/bridging): `quote → initiate` → the user signs the burn on the EVM
+    chain → `submitBurn → waitForTransfer`. Cesto's relayer pays the Solana-side gas and
+    creates the USDC token account if it's the user's first transfer.
   </Step>
   <Step title="Open / close on Solana">
     Once USDC is on the Solana wallet, it's an ordinary SDK position — call
     [`open`](/sdk/open-position) / [`close`](/sdk/close-position) with the user's Solana
-    address. Read holdings any time with
+    address, investing the **arrived** amount (`netOut`). Read holdings any time with
     [`positions.getPosition`](/sdk/positions#position-by-product-sdk-positions).
   </Step>
 </Steps>

@@ -1,0 +1,267 @@
+---
+title: "Bridging (CCTP)"
+icon: "bridge"
+description: "Bridge USDC between EVM chains and Solana with Circle CCTP — burn on the source chain, Cesto attests and mints on the destination."
+---
+
+The SDK bridges **native USDC** between EVM chains (Base, Ethereum) and Solana using
+[Circle CCTP V2](https://developers.circle.com/cctp) — burn-and-mint, so there is no wrapped
+token, no pool, and no slippage. Cesto builds the unsigned burn for the user's wallet to
+sign, watches Circle's attestation service, and lands the destination mint for you.
+
+The flow is **quote → initiate → sign burn → submit burn → poll**:
+
+```
+1. quote       your server ─▶ Cesto     fees, ETA, net-out for the route (no transfer created)
+2. initiate    your server ─▶ Cesto     transfer created → { transferId, unsigned burn tx }
+3. sign        user's wallet            the wallet signs + lands the burn on the SOURCE chain
+4. submitBurn  your server ─▶ Cesto     Cesto verifies the burn against Circle, then drives it
+5. poll        your server ─▶ Cesto     attestation → relayer mint → COMPLETED
+```
+
+After step 3, **no further signature is ever needed**: the destination mint is permissionless
+and submitted by Cesto's gas-only relayer. The user only signs on the chain their funds start
+on.
+
+<Warning>
+  Bridging requires a **write-scoped** API key, and the user still needs a **Solana wallet**
+  to invest afterward — bridging delivers USDC, it does not open positions. See
+  [Integration Models](/sdk/integration-models) for wallet setups, and
+  [Bridge, then invest](#bridge-then-invest) for the handoff.
+</Warning>
+
+## Chains, tokens, modes
+
+- **Chains**: `base`, `ethereum`, `solana` (any direction). Testnet deployments also accept
+  `base-sepolia`, `ethereum-sepolia`, `solana-devnet`.
+- **Token**: native USDC only. All amounts are **USDC base units (6 decimals) as strings** —
+  `"1000000"` is 1 USDC.
+- **Modes**:
+
+| Mode | Fee | Latency | When to use |
+| --- | --- | --- | --- |
+| `standard` | **0** — lossless, 1 in = 1 out | ~20s from Solana, ~15–20 min from EVM (hard finality) | Default; best economics |
+| `fast` | Small (~1 bps), deducted at mint | ~8–20 seconds | Time-sensitive UX |
+
+`fast` waits only for soft finality, so Circle charges a small fee — taken out of the minted
+amount, so **invest what arrived (`netOut`), not what you burned**.
+
+## Quickstart (EVM → Solana)
+
+```ts
+import { Cesto } from '@cesto/sdk';
+
+const cesto = new Cesto({ apiKey: process.env.CESTO_API_KEY }); // write-scoped key
+
+// 1. Quote — fees, ETA, and (for Solana destinations) whether the USDC ATA exists
+const quote = await cesto.bridge.quote({
+  sourceChain: 'base',
+  destChain: 'solana',
+  amount: '10000000', // 10 USDC
+  recipient: userSolanaWallet,
+  mode: 'fast',
+});
+
+// 2. Initiate — creates the transfer, returns the unsigned burn
+const { transferId, burn } = await cesto.bridge.initiate({
+  sourceChain: 'base',
+  destChain: 'solana',
+  amount: '10000000',
+  recipient: userSolanaWallet,
+  mode: 'fast',
+  sourceAddress: userEvmAddress, // the wallet that will sign the burn
+});
+
+// 3. The user signs on the source chain (EVM example with viem)
+if (burn.kind === 'evm') {
+  if (burn.approvalTx) {
+    const approveHash = await walletClient.sendTransaction(burn.approvalTx);
+    await publicClient.waitForTransactionReceipt({ hash: approveHash });
+    // Wait until the allowance is visible before burning — see the note below.
+  }
+  const burnTxHash = await walletClient.sendTransaction(burn.burnTx);
+
+  // 4. Report the landed burn — Cesto verifies it against Circle
+  await cesto.bridge.submitBurn(transferId, { burnTxHash });
+
+  // 5. Wait for the destination mint
+  const done = await cesto.bridge.waitForTransfer(transferId);
+  done.status;  // 'COMPLETED'
+  done.netOut;  // USDC that actually arrived (fast mode deducts its fee here)
+  done.mintTxHash;
+}
+```
+
+<Note>
+  **Confirm the approval before burning.** When `burn.approvalTx` is present, wait for its
+  receipt *and* for the allowance to be readable on-chain before sending `burn.burnTx` —
+  load-balanced RPCs can lag a few seconds behind the approval, and an early burn reverts
+  with `ERC20: transfer amount exceeds allowance`.
+</Note>
+
+### Solana-source burns
+
+When `sourceChain` is Solana, `burn.kind === 'solana'` and the payload is a base64
+transaction plus **`additionalSignerSecrets`** — ephemeral, single-use keypairs the caller
+must co-sign with (CCTP stores the outgoing message in a fresh account that is a required
+signer). They hold no funds and exist only for that signature:
+
+```ts
+import { Keypair, Transaction } from '@solana/web3.js';
+import bs58 from 'bs58';
+
+const tx = Transaction.from(Buffer.from(burn.transaction, 'base64'));
+const extra = burn.additionalSignerSecrets.map((s) => Keypair.fromSecretKey(bs58.decode(s)));
+tx.sign(userKeypair, ...extra);
+const burnTxHash = await connection.sendRawTransaction(tx.serialize());
+await connection.confirmTransaction(sig, 'confirmed');
+```
+
+## The recipient address
+
+`recipient` is always the destination **wallet** — a hex account on EVM, an owner wallet on
+Solana. For Solana destinations CCTP mints into a token account, so Cesto derives the USDC
+ATA from the wallet itself:
+
+- `quote`'s `ataExists` tells you whether that ATA already exists (informational).
+- If it doesn't, the relayer **creates it automatically** at mint time and pays the rent —
+  first-time recipients work out of the box, no SOL needed.
+
+## Bridge, then invest
+
+Bridging and investing are separate steps — the position flow is unchanged. Once a transfer
+completes, open the position **with the arrived amount**, not the burn amount:
+
+```ts
+const done = await cesto.bridge.waitForTransfer(transferId);
+
+const result = await cesto.open.execute({
+  user: userSolanaWallet,
+  slug: 'stable-genius',
+  amount: BigInt(done.netOut!), // fast mode deducts its fee at mint
+  signTransactions: signWithKeypair(keypair),
+});
+```
+
+Withdrawing is the same flow in reverse: [close the position](/sdk/close-position), then
+bridge `solana → base` / `solana → ethereum` back to the user's EVM wallet.
+
+## Method reference
+
+### `bridge.quote(params)`
+
+<ParamField path="sourceChain" type="BridgeChain" required>
+  Chain the USDC leaves from: `base`, `ethereum`, `solana` (+ `-sepolia` / `-devnet` testnet
+  keys on non-production deployments).
+</ParamField>
+<ParamField path="destChain" type="BridgeChain" required>
+  Chain the USDC arrives on.
+</ParamField>
+<ParamField path="amount" type="string" required>
+  USDC base units (6 decimals) as a decimal string.
+</ParamField>
+<ParamField path="recipient" type="string">
+  Destination wallet — enables `ataExists` for Solana destinations.
+</ParamField>
+<ParamField path="mode" type="'standard' | 'fast'" default="'standard'">
+  Transfer speed / fee trade-off.
+</ParamField>
+
+Returns `{ sourceChain, destChain, mode, amount, maxFee, estimatedFee, netOut, etaSeconds, minFinalityThreshold, ataExists? }`.
+Creates nothing — `maxFee` is the fee ceiling, `netOut` the expected arrival amount.
+
+### `bridge.initiate(params)`
+
+Same fields as `quote`, plus:
+
+<ParamField path="recipient" type="string" required>
+  Destination wallet address (EVM hex account or Solana owner).
+</ParamField>
+<ParamField path="sourceAddress" type="string">
+  Source-chain wallet that will sign the burn. Required.
+</ParamField>
+<ParamField path="externalUserId" type="string">
+  Your own user reference, stored on the transfer for reconciliation.
+</ParamField>
+
+Returns `{ transferId, status: 'BURN_TX_BUILT', burn }`, where `burn` is
+`{ kind: 'evm', chainId, approvalTx?, burnTx }` or
+`{ kind: 'solana', transaction, additionalSignerSecrets }`.
+
+### `bridge.submitBurn(transferId, { burnTxHash })`
+
+Reports the landed source-chain burn. Cesto looks the burn up on Circle's attestation
+service and **verifies it matches the transfer** (amount, chains, recipient) before driving
+it. Attestation and minting continue automatically in the background.
+
+<Note>
+  `submitBurn` is **never retried automatically** (like `positions.submit`). If the burn
+  just landed, Circle may need a few seconds to index it — the API absorbs short lags
+  internally; on a `404` simply retry after a few seconds. Re-submitting the same hash is
+  safe: it echoes the current status.
+</Note>
+
+### `bridge.getTransfer(transferId)` / `bridge.waitForTransfer(transferId, options?)`
+
+`getTransfer` returns the transfer with its status, tx hashes, and (once attested)
+`feeExecuted` / `netOut` decoded from the CCTP message. `waitForTransfer` polls until
+`COMPLETED` (resolves) or `FAILED` (rejects with `Cesto.BridgeTransferFailedError`).
+
+<ParamField path="pollIntervalMs" type="number" default="5000">
+  Delay between status polls.
+</ParamField>
+<ParamField path="timeoutMs" type="number" default="1800000">
+  Max total wait — 30 minutes, beyond standard-mode worst case from EVM sources.
+</ParamField>
+
+## Transfer lifecycle
+
+```
+CREATED → BURN_TX_BUILT → BURN_SUBMITTED → ATTESTING → ATTESTED → MINTING → MINTED → COMPLETED
+                                                                                     ↘ FAILED
+```
+
+- **BURN_TX_BUILT** — unsigned burn returned; waiting for the user to sign and land it.
+- **BURN_SUBMITTED** — burn hash accepted (verified, or pending attestation).
+- **ATTESTING** — waiting for Circle's signature (~seconds fast, up to ~20 min standard).
+- **ATTESTED → MINTING → MINTED** — the relayer submits the destination mint.
+- **COMPLETED** — funds arrived; `netOut`, `feeExecuted`, `mintTxHash` are final.
+- **FAILED** — terminal; the `error` field says why. A failed transfer never mints, and a
+  burned amount is always recoverable (attestations don't expire) — contact Cesto support
+  with the `transferId`.
+
+## Common errors
+
+| Situation | What you get |
+| --- | --- |
+| Read-only key on a bridge route | `403 PermissionDeniedError` |
+| Burn hash not indexed by Circle yet | `404` — retry `submitBurn` after a few seconds |
+| Burn doesn't match the transfer (amount / chain / recipient) | `409 ConflictError` at `submitBurn`, or `FAILED` if caught at attestation |
+| Same burn hash attached to another transfer | `409 ConflictError` — nonce is single-use |
+| Unsupported route (e.g. mainnet ↔ testnet) | `400` at `quote` / `initiate` |
+| Attestation exceeds its deadline | transfer `FAILED` with the reason in `error` |
+| `waitForTransfer` hits its timeout | `CestoError` — the transfer keeps progressing server-side; poll `getTransfer` |
+
+## Security model
+
+- **Non-custodial burn.** Cesto builds the burn unsigned; the user's wallet signs and lands
+  it. Cesto never holds source-chain keys.
+- **Gas-only relayer.** The destination mint (`receiveMessage`) is permissionless by
+  protocol design — Cesto's relayer pays destination gas but can only deliver to the
+  `mintRecipient` baked into the signed message. It cannot redirect funds.
+- **Verified before driven.** Every reported burn is matched against Circle's attested
+  message (amount, source/destination domain, recipient) before a mint is attempted.
+- **Idempotent by nonce.** The CCTP message nonce is unique per transfer and consumed at
+  mint — a burn can never be minted twice, and retries are safe.
+- **Key-scoped.** A transfer is visible only to the API key that created it.
+
+## Constraints
+
+- **USDC only**, one token per transfer, base units as strings everywhere.
+- **Recipient wallet required** — for Solana, the USDC ATA is derived (and auto-created)
+  from it.
+- **Relayer-dependent**: if a deployment hasn't configured a destination-chain relayer,
+  mints on that chain are unavailable (`initiate` still works; the mint fails fast with a
+  configuration error).
+- Bridging delivers funds only — positions are opened separately via
+  [Open a Position](/sdk/open-position).

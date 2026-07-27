@@ -19,6 +19,9 @@ all behind a single API key.
   <Card title="Open, Close & Rebalance" icon="right-left">
     Open, close, and rebalance positions where the user's wallet signs its own transactions — Cesto never holds the key.
   </Card>
+  <Card title="Bridging (CCTP)" icon="bridge">
+    Bridge native USDC between EVM chains and Solana — burn on the source chain, Cesto attests and mints on the destination.
+  </Card>
   <Card title="Typed & resilient" icon="shield-check">
     Every method and response is typed (ESM + CJS), with automatic retries, timeouts, and a typed error hierarchy.
   </Card>
@@ -111,6 +114,9 @@ const position = await cesto.positions.getPosition({
   </Card>
   <Card title="Rebalance a Position" icon="arrows-rotate" href="/sdk/rebalance-position">
     Migrate a position to the basket's latest version.
+  </Card>
+  <Card title="Bridging (CCTP)" icon="bridge" href="/sdk/bridging">
+    Bridge USDC between EVM chains and Solana, then invest the arrived amount.
   </Card>
   <Card title="Examples" icon="flask" href="/sdk/examples">
     Runnable Node.js examples for every feature.

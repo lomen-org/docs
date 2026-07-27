@@ -76,6 +76,7 @@
               "sdk/open-position",
               "sdk/close-position",
               "sdk/rebalance-position",
+              "sdk/bridging",
               "sdk/errors",
               "sdk/examples"
             ]
