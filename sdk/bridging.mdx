@@ -1,10 +1,10 @@
 ---
 title: "Bridging (CCTP)"
 icon: "bridge"
-description: "Bridge USDC between EVM chains and Solana with Circle CCTP — the user signs once on the source chain, Cesto attests and mints on the destination."
+description: "Bridge USDC between Base and Solana with Circle CCTP — the user signs once on the source chain, Cesto attests and mints on the destination."
 ---
 
-The SDK bridges **native USDC** between EVM chains (Base, Ethereum) and Solana using
+The SDK bridges **native USDC** between Base and Solana using
 [Circle CCTP V2](https://developers.circle.com/cctp). Burn-and-mint means no wrapped token,
 no pool, no slippage: USDC is burned on the source chain and freshly minted on the
 destination.
@@ -36,22 +36,17 @@ background job.
 
 With `fast`, invest what **arrived** (`netOut`), not what you burned.
 
-## Environments (mainnet vs testnet)
+## Networks
 
-The network is chosen by the **chain key**, not by RPC or config:
+Bridging is currently **mainnet-only**, between two chain keys:
 
-| Network | Chain keys | Attestation |
+| Chain key | Chain | Attestation |
 | --- | --- | --- |
-| Mainnet | `base`, `ethereum`, `solana` | Circle production Iris |
-| Testnet | `base-sepolia`, `ethereum-sepolia`, `solana-devnet` | Circle sandbox Iris |
+| `base` | Base mainnet | Circle production Iris |
+| `solana` | Solana mainnet | Circle production Iris |
 
-- **Production deployments reject testnet keys** (and vice versa for routes mixing
-  networks — e.g. `base → solana-devnet` is a `400`). Both legs of a transfer stay in one
-  network.
-- Test integrations run against Circle's sandbox attestation automatically — no extra
-  config. Get test USDC from [Circle's faucet](https://faucet.circle.com) (per chain).
-- RPC overrides (`BRIDGE_RPC_*`) only change *which node* the backend talks to on a given
-  chain — they never switch the network.
+Additional chains will be added as they launch — `quote` / `initiate` reject
+unsupported chain keys with a `400`.
 
 ## Quickstart (EVM → Solana)
 
@@ -146,15 +141,14 @@ const result = await cesto.open.execute({
 ```
 
 Withdrawing is the mirror image: [close the position](/sdk/close-position), then bridge
-`solana → base` / `solana → ethereum` back to the user's EVM wallet.
+`solana → base` back to the user's EVM wallet.
 
 ## Method reference
 
 ### `bridge.quote(params)` → `BridgeQuote`
 
 <ParamField path="sourceChain" type="BridgeChain" required>
-  `base`, `ethereum`, `solana` (`base-sepolia`, `ethereum-sepolia`, `solana-devnet` on
-  non-production deployments).
+  `base` or `solana` (mainnet).
 </ParamField>
 <ParamField path="destChain" type="BridgeChain" required>
   Chain the USDC arrives on.
@@ -234,7 +228,7 @@ with the `transferId`.
 | Burn not indexed by Circle yet | `404` — retry `submitBurn` shortly |
 | Burn doesn't match the transfer | `409 ConflictError`, or `FAILED` if caught at attestation |
 | Same burn attached to another transfer | `409 ConflictError` — nonces are single-use |
-| Unsupported route (e.g. mainnet ↔ testnet) | `400` at `quote` / `initiate` |
+| Unsupported chain key or route | `400` at `quote` / `initiate` |
 | Attestation deadline exceeded | transfer `FAILED`, reason in `error` |
 
 ## Security model
