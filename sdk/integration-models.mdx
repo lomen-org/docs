@@ -36,8 +36,8 @@ tell which path is yours before you write any code.
     split `prepare → sign → submit → poll` flow.
   </Card>
   <Card title="Cross-chain (EVM → Solana)" icon="right-left">
-    Users hold funds on Base / Monad / Ethereum. Bridge USDC in with the SDK's native CCTP
-    bridging, then open/close as normal on Solana.
+    Users hold USDC on Base. Bridge it in with the SDK's native CCTP bridging, then
+    open/close as normal on Solana.
   </Card>
 </CardGroup>
 
@@ -128,7 +128,7 @@ Prepared transactions expire ~60s after `prepare`, and the wallet must sign them
 
 ## Cross-chain users (EVM to Solana)
 
-Some partners' users hold funds on **Base, Monad, or Ethereum**, not Solana. The SDK's
+Some partners' users hold funds on **Base**, not Solana. The SDK's
 [bridging resource](/sdk/bridging) moves their **USDC** onto Solana natively (Circle CCTP —
 the user signs one burn on the EVM chain, Cesto attests and mints on Solana) — no
 third-party bridge, no SOL needed on the destination.
@@ -147,7 +147,7 @@ The pattern:
     to their EVM wallet, so a single user is resolvable across chains.
 
     ```text
-    end user  ──▶  EVM wallet (Base / Monad / Ethereum)  ──▶  Cesto SVM (Privy) wallet
+    end user  ──▶  EVM wallet (Base)  ──▶  Cesto SVM (Privy) wallet
               external mapping                bridge destination
     ```
   </Step>
