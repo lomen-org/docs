@@ -1,126 +1,194 @@
 ---
 title: "Rebalance a Position"
 icon: "arrows-rotate"
-description: "Migrate a wallet's position to the basket's latest version."
+description: "Migrate a wallet's position to the basket's latest version — one call on a managed wallet, or client-signed transactions (BYOW)."
 ---
 
 Baskets are **versioned** — a creator can publish a new version that changes the token mix.
 Rebalancing migrates a wallet's position from the version it currently holds to the basket's
 **latest version** by swapping the old basket tokens **directly** into the new ones (e.g.
-`NVDAon → QQQon`) — not selling to USDC and rebuying. Like open and close, it is
-**self-custody**: the user's wallet signs every transaction and Cesto never holds the key.
+`NVDAon → QQQon`) — not selling to USDC and rebuying. In the BYOW model it is
+**self-custody** — the user's wallet signs every transaction and Cesto never holds the key;
+in the managed model Cesto signs server-side.
 
-<Note>
-  This page covers the **client-signed (BYOW)** flow. If the user's wallet is
-  **Cesto-managed** (provisioned via `users.create`), no signing is needed — use
-  [`cesto.managed.rebalance`](/sdk/managed-wallets) instead.
-</Note>
+<Tabs>
+  <Tab title="Managed (recommended)">
+    For Cesto-managed wallets (provisioned via [`users.create`](/sdk/managed-wallets)),
+    Cesto signs server-side — one call, then poll:
 
-Because every swap's input is the wallet's **current on-chain balance** (known at prepare
-time), the whole set is built, signed, and submitted in **one batch** — exactly like an
-[open](/sdk/open-position). The flow is the same **prepare → sign → submit → poll**, with no
-rounds and no waiting between steps:
-
-```
-1. prepare   your server ─▶ Cesto     Cesto builds all swap txs → { done, executionId, transactions, expiresAt }
-2. sign      user's wallet            the wallet signs each transaction locally (Phantom / Solflare / keypair)
-3. submit    your server ─▶ Cesto     Cesto byte-verifies ownership + integrity, then lands the transactions
-4. poll      your server ─▶ Cesto     poll the execution until COMPLETED / PARTIALLY_COMPLETED / FAILED
-```
-
-<Note>
-  `prepare` returns a **`done`** flag. When `done` is `true` the position is already on the
-  latest version — there is nothing to migrate. `transactions` is empty and `executionId` may
-  be `null`. This is **not an error**: just stop.
-</Note>
-
-<Warning>
-  Rebalancing requires a **write-scoped** API key (read-only keys get a `403` on write
-  routes). It follows the same signing and gas model as [opening](/sdk/open-position): the
-  wallet signs every leg, and Cesto **sponsors the network gas and ATA rent** — no SOL needed.
-</Warning>
-
-## Rebalance flow (browser wallet signs)
-
-In a web app the SDK runs on **your backend**, but the signatures come from the user's wallet
-in the **browser**. Prepare, hop to the browser to sign, then submit and poll — identical in
-shape to the [open split flow](/sdk/open-position#split-flow-browser-wallet-signs):
-
-<Steps>
-  <Step title="Backend: prepare">
     ```ts
-    const prepared = await cesto.rebalance.prepare({
-      user: userWalletAddress,
+    import { Cesto } from '@cesto/sdk';
+
+    const cesto = new Cesto({ apiKey: process.env.CESTO_API_KEY }); // write-scoped key, server-side only
+
+    const result = await cesto.managed.rebalanceAndWait({
+      user: user.solanaAddress, // or the externalUserId / EVM wallet you provisioned with
       slug: 'stable-genius',
     });
-    // { done, executionId, transactions: [{ nodeId, transaction }], expiresAt }
-
-    if (prepared.done) {
-      // Nothing to rebalance — the position is already on the latest version. Stop.
-      return;
-    }
+    result.status;       // 'COMPLETED' | 'PARTIALLY_COMPLETED' | 'FAILED'
+    result.transactions; // per-leg { nodeId, ok, signature?, error? }
     ```
 
-    Send `prepared.transactions` to the browser immediately — the set expires **~60 seconds**
-    after prepare. Slippage uses the platform default; there is no slippage parameter.
-  </Step>
-  <Step title="Browser: the user signs">
-    Sign the transactions **as-is** — any modified byte is rejected at submit. Same signing
-    code as the [open flow](/sdk/open-position#split-flow-browser-wallet-signs).
+    There is no `done` flag to check and no batch to sign — the managed call enqueues the
+    migration directly. If the position is already on the latest version there is nothing
+    to migrate. The read-only previews below (`getAvailability`, `getHistory`) accept any
+    Solana address, including a managed wallet's `solanaAddress`, so you can still show
+    users what a rebalance would do before calling it.
+
+    Full managed reference: [Managed Wallets](/sdk/managed-wallets).
+  </Tab>
+  <Tab title="BYOW (client-signed)">
+    Because every swap's input is the wallet's **current on-chain balance** (known at
+    prepare time), the whole set is built, signed, and submitted in **one batch** — exactly
+    like an [open](/sdk/open-position). The flow is the same **prepare → sign → submit →
+    poll**, with no rounds and no waiting between steps:
+
+    ```
+    1. prepare   your server ─▶ Cesto     Cesto builds all swap txs → { done, executionId, transactions, expiresAt }
+    2. sign      user's wallet            the wallet signs each transaction locally (Phantom / Solflare / keypair)
+    3. submit    your server ─▶ Cesto     Cesto byte-verifies ownership + integrity, then lands the transactions
+    4. poll      your server ─▶ Cesto     poll the execution until COMPLETED / PARTIALLY_COMPLETED / FAILED
+    ```
+
+    <Note>
+      `prepare` returns a **`done`** flag. When `done` is `true` the position is already on
+      the latest version — there is nothing to migrate. `transactions` is empty and
+      `executionId` may be `null`. This is **not an error**: just stop.
+    </Note>
+
+    <Warning>
+      Rebalancing requires a **write-scoped** API key (read-only keys get a `403` on write
+      routes). It follows the same signing and gas model as [opening](/sdk/open-position):
+      the wallet signs every leg, and Cesto **sponsors the network gas and ATA rent** — no
+      SOL needed.
+    </Warning>
+
+    ## Rebalance flow (browser wallet signs)
+
+    In a web app the SDK runs on **your backend**, but the signatures come from the user's
+    wallet in the **browser**. Prepare, hop to the browser to sign, then submit and poll —
+    identical in shape to the [open split flow](/sdk/open-position#split-flow-browser-wallet-signs):
+
+    <Steps>
+      <Step title="Backend: prepare">
+        ```ts
+        const prepared = await cesto.rebalance.prepare({
+          user: userWalletAddress,
+          slug: 'stable-genius',
+        });
+        // { done, executionId, transactions: [{ nodeId, transaction }], expiresAt }
+
+        if (prepared.done) {
+          // Nothing to rebalance — the position is already on the latest version. Stop.
+          return;
+        }
+        ```
+
+        Send `prepared.transactions` to the browser immediately — the set expires **~60
+        seconds** after prepare. Slippage uses the platform default; there is no slippage
+        parameter.
+      </Step>
+      <Step title="Browser: the user signs">
+        Sign the transactions **as-is** — any modified byte is rejected at submit. Same
+        signing code as the [open flow](/sdk/open-position#split-flow-browser-wallet-signs).
+
+        ```ts
+        import { VersionedTransaction } from '@solana/web3.js';
+
+        const signed = await Promise.all(
+          prepared.transactions.map(async ({ nodeId, transaction }) => {
+            const tx = VersionedTransaction.deserialize(Buffer.from(transaction, 'base64'));
+            const signedTx = await wallet.signTransaction(tx); // wallet-adapter
+            return { nodeId, signedTransaction: Buffer.from(signedTx.serialize()).toString('base64') };
+          }),
+        );
+        // POST { executionId, transactions: signed } back to your backend
+        ```
+      </Step>
+      <Step title="Backend: submit and wait">
+        ```ts
+        await cesto.positions.submit({
+          executionId: prepared.executionId,
+          transactions: signed,
+        });
+
+        const result = await cesto.positions.waitForExecution(prepared.executionId, {
+          timeoutMs: 120_000,
+        });
+        result.status; // 'COMPLETED' | 'PARTIALLY_COMPLETED' | 'FAILED'
+        ```
+      </Step>
+    </Steps>
+
+    ## Backend that holds the keypair
+
+    When your backend controls the signing keypair — bots, agents, services you custody —
+    run the same four calls in one place, signing the prepared transactions with the
+    `signWithKeypair` helper (the same one [open](/sdk/open-position#one-call-flow-you-hold-the-keypair)
+    uses). Load the keypair from a server-side environment variable — never hardcode it.
 
     ```ts
-    import { VersionedTransaction } from '@solana/web3.js';
+    import { signWithKeypair } from '@cesto/sdk';
 
-    const signed = await Promise.all(
-      prepared.transactions.map(async ({ nodeId, transaction }) => {
-        const tx = VersionedTransaction.deserialize(Buffer.from(transaction, 'base64'));
-        const signedTx = await wallet.signTransaction(tx); // wallet-adapter
-        return { nodeId, signedTransaction: Buffer.from(signedTx.serialize()).toString('base64') };
-      }),
-    );
-    // POST { executionId, transactions: signed } back to your backend
+    const prepared = await cesto.rebalance.prepare({ user: wallet, slug: 'stable-genius' });
+    if (prepared.done) return; // already on the latest version
+
+    const signed = await signWithKeypair(keypair)(prepared.transactions);
+    await cesto.positions.submit({ executionId: prepared.executionId, transactions: signed });
+
+    const result = await cesto.positions.waitForExecution(prepared.executionId);
+    result.status;       // 'COMPLETED' | 'PARTIALLY_COMPLETED' | 'FAILED'
+    result.transactions; // per-leg { nodeId, ok, signature?, error? }
     ```
-  </Step>
-  <Step title="Backend: submit and wait">
-    ```ts
-    await cesto.positions.submit({
-      executionId: prepared.executionId,
-      transactions: signed,
-    });
 
-    const result = await cesto.positions.waitForExecution(prepared.executionId, {
-      timeoutMs: 120_000,
-    });
-    result.status; // 'COMPLETED' | 'PARTIALLY_COMPLETED' | 'FAILED'
-    ```
-  </Step>
-</Steps>
+    ## Method reference
 
-## Backend that holds the keypair
+    ### `rebalance.prepare(params)`
 
-When your backend controls the signing keypair — bots, agents, services you custody — run the
-same four calls in one place, signing the prepared transactions with the `signWithKeypair`
-helper (the same one [open](/sdk/open-position#one-call-flow-you-hold-the-keypair) uses):
+    <ParamField path="user" type="string" required>
+      Solana address of the wallet rebalancing — it signs and pays for every transaction.
+    </ParamField>
+    <ParamField path="slug" type="string" required>
+      Basket to rebalance, by slug (a product id also works).
+    </ParamField>
 
-```ts
-import { signWithKeypair } from '@cesto/sdk';
+    Returns `{ done, executionId, transactions, expiresAt }`. When `done` is `true` the
+    position is already on the latest version: `transactions` is empty and `executionId`
+    may be `null` — stop, it's not an error. Otherwise the whole migration is **one**
+    `executionId`, submitted in a single batch.
 
-const prepared = await cesto.rebalance.prepare({ user: wallet, slug: 'stable-genius' });
-if (prepared.done) return; // already on the latest version
+    ### Submit & status
 
-const signed = await signWithKeypair(keypair)(prepared.transactions);
-await cesto.positions.submit({ executionId: prepared.executionId, transactions: signed });
+    Submitting the signed transactions and polling for the result reuse the shared
+    [`positions.submit`](/sdk/open-position#method-reference),
+    [`positions.getExecution`](/sdk/open-position#method-reference), and
+    [`positions.waitForExecution`](/sdk/open-position#method-reference) methods — identical
+    to open and close.
 
-const result = await cesto.positions.waitForExecution(prepared.executionId);
-result.status;       // 'COMPLETED' | 'PARTIALLY_COMPLETED' | 'FAILED'
-result.transactions; // per-leg { nodeId, ok, signature?, error? }
-```
+    ## Common errors
+
+    | Situation | What you get |
+    | --- | --- |
+    | Read-only key on `prepare` | `403 PermissionDeniedError` |
+    | Nothing to rebalance (already on latest version, or no position) | `prepare` returns `done: true` (not an error) |
+    | Prepared txs older than ~60s / already submitted / replaced | `409 ConflictError` at submit → re-`prepare` |
+    | Submitted tx bytes altered vs prepared | `400` — only signatures may be added |
+    | Signed by a different wallet than prepared for | `400` — the wallet's signature must verify |
+    | Another open/close/rebalance in flight for this wallet + product | conflict at prepare/submit |
+    | `submit` timed out client-side | do **not** re-send; poll `getExecution`, then `prepare` again |
+  </Tab>
+</Tabs>
+
+<Warning>
+  **Examples on this page move real mainnet funds.** A rebalance swaps real holdings on
+  Solana mainnet — test with small amounts first.
+</Warning>
 
 ## Previewing a rebalance
 
-`rebalance.getAvailability` is a **read** (works with a read-only key). Use it to show the
-user what a rebalance would do before they commit — the target version, the token diffs, and
-whether they're eligible.
+`rebalance.getAvailability` is a **read** (works with a read-only key, and accepts any
+Solana address — BYOW or managed). Use it to show the user what a rebalance would do before
+they commit — the target version, the token diffs, and whether they're eligible.
 
 ```ts
 const availability = await cesto.rebalance.getAvailability({
@@ -139,6 +207,19 @@ When `available` is `false`, `reason` explains why (e.g. `no_positions`, `no_new
 (and `ineligibleReason` is populated when the invested amount is below the new version's
 minimum).
 
+### `rebalance.getAvailability(params)`
+
+<ParamField path="user" type="string" required>
+  Solana address of the wallet whose position would be rebalanced.
+</ParamField>
+<ParamField path="slug" type="string" required>
+  Basket to rebalance, by slug (a product id also works).
+</ParamField>
+
+Returns the availability preview: `{ available, reason?, currentVersionId?, targetVersionId?,
+currentVersionLabel?, targetVersionLabel?, tokensToSell, tokensToBuy, tokensUnchanged,
+positions, totalInvested, estimatedPlatformFee, eligible, eligibilityErrors?, ineligibleReason? }`.
+
 ## Rebalance history
 
 `rebalance.getHistory` lists the wallet's past rebalances of the basket — each version move,
@@ -153,88 +234,40 @@ const { history } = await cesto.rebalance.getHistory({
 //                signatures, totalFees, startedAt, completedAt, ... }
 ```
 
-## Method reference
-
-### `rebalance.getAvailability(params)`
-
-<ParamField path="user" type="string" required>
-  Solana address of the wallet whose position would be rebalanced.
-</ParamField>
-<ParamField path="slug" type="string" required>
-  Basket to rebalance, by slug (a product id also works).
-</ParamField>
-
-Returns the availability preview: `{ available, reason?, currentVersionId?, targetVersionId?,
-currentVersionLabel?, targetVersionLabel?, tokensToSell, tokensToBuy, tokensUnchanged,
-positions, totalInvested, estimatedPlatformFee, eligible, eligibilityErrors?, ineligibleReason? }`.
-
-### `rebalance.prepare(params)`
-
-<ParamField path="user" type="string" required>
-  Solana address of the wallet rebalancing — it signs and pays for every transaction.
-</ParamField>
-<ParamField path="slug" type="string" required>
-  Basket to rebalance, by slug (a product id also works).
-</ParamField>
-
-Returns `{ done, executionId, transactions, expiresAt }`. When `done` is `true` the position
-is already on the latest version: `transactions` is empty and `executionId` may be `null` —
-stop, it's not an error. Otherwise the whole migration is **one** `executionId`, submitted in
-a single batch.
-
-### `rebalance.getHistory(params)`
-
-Same `{ user, slug }` params. Returns `{ history }` — the wallet's past rebalances of the basket.
-
-### Submit & status
-
-Submitting the signed transactions and polling for the result reuse the shared
-[`positions.submit`](/sdk/open-position#method-reference),
-[`positions.getExecution`](/sdk/open-position#method-reference), and
-[`positions.waitForExecution`](/sdk/open-position#method-reference) methods — identical to open
-and close.
+`getHistory` takes the same `{ user, slug }` params as `getAvailability` and returns
+`{ history }`.
 
 ## Execution results
 
 Terminal statuses are `COMPLETED`, `PARTIALLY_COMPLETED`, and `FAILED` — exactly as for an
-[open](/sdk/open-position#execution-results).
+[open](/sdk/open-position#execution-results), in both models.
 
 <Warning>
   **Partial completion is real.** A rebalance is several independent swaps with no atomicity
   across them. If a swap leg fails, the execution ends `PARTIALLY_COMPLETED` and
   `result.transactions` shows which legs landed (with signatures) and which failed. To finish
-  the migration, simply call `rebalance.prepare` again — it re-reads the wallet's current
-  on-chain balances and targets only the tokens that still need migrating. There are no
-  rounds to resume.
+  the migration, simply rebalance again (`managed.rebalance` / `rebalance.prepare`) — it
+  re-reads the wallet's current on-chain balances and targets only the tokens that still
+  need migrating. There are no rounds to resume.
 </Warning>
 
 To read the resulting position, use
 [`positions.getPosition`](/sdk/positions#position-by-product-sdk-positions) — SDK positions are
 self-custody and do **not** appear in `positions.getPositions`.
 
-## Common errors
-
-| Situation | What you get |
-| --- | --- |
-| Read-only key on `prepare` | `403 PermissionDeniedError` |
-| Nothing to rebalance (already on latest version, or no position) | `prepare` returns `done: true` (not an error) |
-| Prepared txs older than ~60s / already submitted / replaced | `409 ConflictError` at submit → re-`prepare` |
-| Submitted tx bytes altered vs prepared | `400` — only signatures may be added |
-| Signed by a different wallet than prepared for | `400` — the wallet's signature must verify |
-| Another open/close/rebalance in flight for this wallet + product | conflict at prepare/submit |
-| `submit` timed out client-side | do **not** re-send; poll `getExecution`, then `prepare` again |
-
 ## Constraints
 
 - **Swap-only baskets.** No prediction markets, lending, or perps.
 - **Needs a position on an older version** and a **newer version published** for the basket —
-  otherwise `getAvailability` returns `available: false` and `prepare` returns `done: true`.
+  otherwise `getAvailability` returns `available: false` and (BYOW) `prepare` returns
+  `done: true`.
 - **One in-flight execution** per wallet + product.
 - **Gas sponsored** — Cesto pays network gas + ATA rent; the wallet needs no SOL (unless the
   deployment runs without a sponsor).
 
 ## Related
 
+- [Managed Wallets](/sdk/managed-wallets) — the recommended server-signed flow.
 - [Open a Position](/sdk/open-position) — the client-signed model, gas, and `signWithKeypair`.
 - [Close a Position](/sdk/close-position) — sell the wallet's full basket holding.
 - [Positions](/sdk/positions) — read a wallet's live per-basket holdings.

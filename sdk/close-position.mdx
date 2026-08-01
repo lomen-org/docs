@@ -1,92 +1,121 @@
 ---
 title: "Close a Position"
 icon: "circle-minus"
-description: "Close a basket position with client-signed transactions."
+description: "Close a basket position — one call on a managed wallet, or client-signed transactions (BYOW)."
 ---
 
-<Note>
-  This page covers the **client-signed (BYOW)** flow. If the user's wallet is
-  **Cesto-managed** (provisioned via `users.create`), no signing is needed — use
-  [`cesto.managed.close`](/sdk/managed-wallets) instead.
-</Note>
+Closing sells the wallet's **full holding** of a basket's tokens back to USDC. It is
+balance-driven — whatever of the basket the wallet holds gets closed, exactly what
+[`positions.getPosition`](/sdk/positions#position-by-product-sdk-positions) reports. There
+is no `amount` and no partial close. Both models share this semantics; they differ only in
+who signs.
 
-Closing follows the same client-signed **prepare → sign → submit → poll** flow as
-[opening](/sdk/open-position), with two differences:
+<Tabs>
+  <Tab title="Managed (recommended)">
+    For Cesto-managed wallets (provisioned via [`users.create`](/sdk/managed-wallets)),
+    Cesto signs server-side — one call, then poll:
 
-- **No `amount`** — close always sells the wallet's **full holding** of the basket's
-  tokens. It is balance-driven: whatever of the basket the wallet holds gets closed,
-  exactly what [`positions.getPosition`](/sdk/positions#position-by-product-sdk-positions)
-  reports. There is no partial close.
-- The prepare call is `close.prepare` / the one-call helper is `close.execute`.
-
-<Warning>
-  Like opening, closing requires a **write-scoped** API key. Cesto **sponsors the gas and
-  ATA rent**, so the wallet needs **no SOL**.
-</Warning>
-
-## One-call flow (you hold the keypair)
-
-```ts
-import { signWithKeypair } from '@cesto/sdk';
-
-const result = await cesto.close.execute({
-  user: wallet,
-  slug: 'stable-genius',
-  signTransactions: signWithKeypair(keypair), // same helper as open — signs each leg locally
-});
-result.status;       // 'COMPLETED' | 'PARTIALLY_COMPLETED' | 'FAILED'
-result.transactions; // per-leg { nodeId, ok, signature?, error? }
-```
-
-See [Open a Position](/sdk/open-position#one-call-flow-you-hold-the-keypair) for the full
-`signWithKeypair` setup (and how to supply your own `signTransactions` callback instead).
-
-## Split flow (browser wallet signs)
-
-<Steps>
-  <Step title="Backend: prepare">
     ```ts
-    const prepared = await cesto.close.prepare({
-      user: userWalletAddress,
+    import { Cesto } from '@cesto/sdk';
+
+    const cesto = new Cesto({ apiKey: process.env.CESTO_API_KEY }); // write-scoped key, server-side only
+
+    const result = await cesto.managed.closeAndWait({
+      user: user.solanaAddress, // or the externalUserId / EVM wallet you provisioned with
       slug: 'stable-genius',
     });
-    // { executionId, transactions: [{ nodeId, transaction }], expiresAt }
+    result.status;       // 'COMPLETED' | 'PARTIALLY_COMPLETED' | 'FAILED'
+    result.transactions; // per-leg { nodeId, ok, signature?, error? }
     ```
 
-    Send `prepared.transactions` to the browser immediately — the set expires **~60 seconds**
-    after prepare.
-  </Step>
-  <Step title="Browser: the user signs">
-    Sign the transactions **as-is** — any modified byte is rejected at submit. Same signing
-    code as the [open flow](/sdk/open-position#split-flow-browser-wallet-signs).
-  </Step>
-  <Step title="Backend: submit and wait">
+    A `PARTIALLY_COMPLETED` close means some legs sold and some didn't; a fresh
+    `managed.close` targets exactly what's left. To get the USDC back to the user's EVM
+    wallet afterwards, see [Managed Wallets → Withdrawing](/sdk/managed-wallets#withdrawing).
+  </Tab>
+  <Tab title="BYOW (client-signed)">
+    Closing follows the same client-signed **prepare → sign → submit → poll** flow as
+    [opening](/sdk/open-position), with two differences:
+
+    - **No `amount`** — close always sells the wallet's full holding (see above).
+    - The prepare call is `close.prepare` / the one-call helper is `close.execute`.
+
+    <Warning>
+      Like opening, closing requires a **write-scoped** API key. Cesto **sponsors the gas
+      and ATA rent**, so the wallet needs **no SOL**.
+    </Warning>
+
+    ## One-call flow (you hold the keypair)
+
     ```ts
-    await cesto.positions.submit({
-      executionId: prepared.executionId,
-      transactions: signed,
+    import { signWithKeypair } from '@cesto/sdk';
+
+    const result = await cesto.close.execute({
+      user: wallet,
+      slug: 'stable-genius',
+      signTransactions: signWithKeypair(keypair), // same helper as open — signs each leg locally
     });
-
-    const result = await cesto.positions.waitForExecution(prepared.executionId);
+    result.status;       // 'COMPLETED' | 'PARTIALLY_COMPLETED' | 'FAILED'
+    result.transactions; // per-leg { nodeId, ok, signature?, error? }
     ```
-  </Step>
-</Steps>
 
-## Method reference
+    See [Open a Position](/sdk/open-position#one-call-flow-you-hold-the-keypair) for the
+    full `signWithKeypair` setup (and how to supply your own `signTransactions` callback
+    instead). The keypair stays server-side, loaded from the environment — never hardcoded,
+    never shipped to a client.
 
-### `close.prepare(params)`
+    ## Split flow (browser wallet signs)
 
-<ParamField path="user" type="string" required>
-  Solana address of the wallet closing the position.
-</ParamField>
-<ParamField path="slug" type="string" required>
-  Basket to close, by slug (a product id also works).
-</ParamField>
+    <Steps>
+      <Step title="Backend: prepare">
+        ```ts
+        const prepared = await cesto.close.prepare({
+          user: userWalletAddress,
+          slug: 'stable-genius',
+        });
+        // { executionId, transactions: [{ nodeId, transaction }], expiresAt }
+        ```
 
-Returns `{ executionId, transactions, expiresAt }`.
+        Send `prepared.transactions` to the browser immediately — the set expires **~60
+        seconds** after prepare.
+      </Step>
+      <Step title="Browser: the user signs">
+        Sign the transactions **as-is** — any modified byte is rejected at submit. Same
+        signing code as the [open flow](/sdk/open-position#split-flow-browser-wallet-signs).
+      </Step>
+      <Step title="Backend: submit and wait">
+        ```ts
+        await cesto.positions.submit({
+          executionId: prepared.executionId,
+          transactions: signed,
+        });
 
-`positions.submit`, `getExecution`, and `waitForExecution` are shared with the open flow —
-see the [method reference](/sdk/open-position#method-reference) there.
+        const result = await cesto.positions.waitForExecution(prepared.executionId);
+        ```
+      </Step>
+    </Steps>
+
+    ## Method reference
+
+    ### `close.prepare(params)`
+
+    <ParamField path="user" type="string" required>
+      Solana address of the wallet closing the position.
+    </ParamField>
+    <ParamField path="slug" type="string" required>
+      Basket to close, by slug (a product id also works).
+    </ParamField>
+
+    Returns `{ executionId, transactions, expiresAt }`.
+
+    `positions.submit`, `getExecution`, and `waitForExecution` are shared with the open
+    flow — see the [method reference](/sdk/open-position#method-reference) there.
+  </Tab>
+</Tabs>
+
+<Warning>
+  **Examples on this page move real mainnet funds.** Closing sells real holdings on Solana
+  mainnet — test with small amounts first.
+</Warning>
 
 ## Results, errors, and security
 
@@ -97,8 +126,8 @@ semantics, the common-error table, and the security model are identical to openi
 - A wallet with **no holdings** of the basket has nothing to sell — check
   `positions.getPosition(...).hasPosition` before preparing a close.
 - A `PARTIALLY_COMPLETED` close means some legs sold and some didn't; the remaining
-  holdings are still in the wallet and a fresh `close.prepare` will target exactly what's
-  left.
+  holdings are still in the wallet and a fresh close (`managed.close` or `close.prepare`)
+  will target exactly what's left.
 
 ## Rebalancing
 

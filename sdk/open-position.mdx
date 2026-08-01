@@ -1,180 +1,236 @@
 ---
 title: "Open a Position"
 icon: "circle-plus"
-description: "Open a basket position with client-signed transactions."
+description: "Open a basket position — one call on a managed wallet, or client-signed transactions (BYOW)."
 ---
 
-The SDK opens positions where the end-user's wallet **signs its own transactions**. Cesto
-builds the exact unsigned transactions, the wallet signs them, and Cesto verifies and lands
-them — Cesto never holds the user's key.
+How you open depends on who controls the Solana wallet. The **managed** flow is the
+recommended default: Cesto signs server-side and you make one call. The **BYOW** flow is
+for self-custody or partner-controlled wallets: Cesto builds the exact unsigned
+transactions, the wallet signs them, and Cesto verifies and lands them — Cesto never holds
+the user's key.
 
-<Note>
-  This page covers the **client-signed (BYOW)** flow. If the user's wallet is
-  **Cesto-managed** (provisioned via `users.create`), no signing is needed — use
-  [`cesto.managed.*`](/sdk/managed-wallets) instead.
-</Note>
+<Tabs>
+  <Tab title="Managed (recommended)">
+    For Cesto-managed wallets (provisioned via [`users.create`](/sdk/managed-wallets)),
+    there is no signing step at all — one call returns an `{ executionId }`, and the
+    `*AndWait` variant polls it to a terminal status:
 
-The flow is **prepare → sign → submit → poll**:
+    ```ts
+    import { Cesto } from '@cesto/sdk';
 
-```
-1. prepare   your server ─▶ Cesto     Cesto builds all unsigned txs → { executionId, transactions, expiresAt }
-2. sign      user's wallet            the wallet signs each transaction locally (Phantom / Solflare / keypair)
-3. submit    your server ─▶ Cesto     Cesto byte-verifies ownership + integrity, then lands the transactions
-4. poll      your server ─▶ Cesto     poll the execution until COMPLETED / PARTIALLY_COMPLETED / FAILED
-```
+    const cesto = new Cesto({ apiKey: process.env.CESTO_API_KEY }); // write-scoped key, server-side only
+
+    const result = await cesto.managed.openAndWait({
+      user: user.solanaAddress, // or the externalUserId / EVM wallet you provisioned with
+      slug: 'stable-genius',
+      amount: 100_000_000n, // bigint, input-token base units (100 USDC @ 6 decimals)
+    });
+    result.status;       // 'COMPLETED' | 'PARTIALLY_COMPLETED' | 'FAILED'
+    result.transactions; // per-leg { nodeId, ok, signature?, error? }
+    ```
+
+    Cesto sponsors gas and ATA rent, so managed wallets need only **USDC** — no SOL.
+    Execution results, partial-completion semantics, and error handling are identical to
+    the BYOW flow described on this page. Full reference, funding, and withdrawal:
+    [Managed Wallets](/sdk/managed-wallets).
+  </Tab>
+  <Tab title="BYOW (client-signed)">
+    The BYOW flow is **prepare → sign → submit → poll**:
+
+    ```
+    1. prepare   your server ─▶ Cesto     Cesto builds all unsigned txs → { executionId, transactions, expiresAt }
+    2. sign      user's wallet            the wallet signs each transaction locally (Phantom / Solflare / keypair)
+    3. submit    your server ─▶ Cesto     Cesto byte-verifies ownership + integrity, then lands the transactions
+    4. poll      your server ─▶ Cesto     poll the execution until COMPLETED / PARTIALLY_COMPLETED / FAILED
+    ```
+
+    <Warning>
+      Opening requires a **write-scoped** API key (read-only keys get a `403` on write
+      routes). Cesto **sponsors the network gas and account (ATA) rent**, so the user's
+      wallet needs **no SOL** — only the basket's **input token (USDC)** to invest (plus
+      the platform fee).
+    </Warning>
+
+    <Note>
+      Gas sponsorship is on by default. If a deployment runs without a configured sponsor,
+      the wallet falls back to paying its own gas and must then hold a little SOL.
+    </Note>
+
+    There is no separate ownership challenge: **the signatures are the ownership proof**.
+    Prepare only needs the wallet *address*.
+
+    <Note>
+      Which flow you use depends on your wallet setup — see
+      [Integration Models](/sdk/integration-models). Backends that can sign (your own Privy
+      or a keypair you custody) use the one-call flow; browser EOAs like Phantom /
+      Solflare use the split flow.
+    </Note>
+
+    ## One-call flow (you hold the keypair)
+
+    When your backend controls the signing keypair — bots, agents, services you custody —
+    `open.execute` runs the whole flow in one call. You supply a `signTransactions`
+    callback, so the SDK never touches the private key. The SDK ships a `signWithKeypair`
+    helper that builds that callback from your keypair:
+
+    ```ts
+    import { Cesto, signWithKeypair } from '@cesto/sdk';
+    import { Keypair } from '@solana/web3.js';
+    import bs58 from 'bs58';
+
+    const cesto = new Cesto({ apiKey: process.env.CESTO_API_KEY }); // write-scoped key
+
+    // Load the key from a server-side secret — never hardcode it or ship it to a client.
+    const keypair = Keypair.fromSecretKey(bs58.decode(process.env.SOLANA_SECRET_KEY!));
+    const wallet = keypair.publicKey.toBase58();
+
+    const result = await cesto.open.execute({
+      user: wallet,
+      slug: 'stable-genius',
+      amount: 100_000_000n, // input base units (e.g. 100 USDC @ 6 decimals)
+      signTransactions: signWithKeypair(keypair), // signs each prepared leg locally
+    });
+    result.status;       // 'COMPLETED' | 'PARTIALLY_COMPLETED' | 'FAILED'
+    result.transactions; // per-leg { nodeId, ok, signature?, error? }
+    ```
+
+    <Note>
+      `signWithKeypair` needs `@solana/web3.js` (an optional peer dependency — install it
+      alongside `@cesto/sdk`). Prefer to sign yourself? Pass any
+      `async (transactions) => …` callback that returns one `{ nodeId, signedTransaction }`
+      per prepared leg — only signatures may be added, the message bytes must stay
+      byte-identical.
+    </Note>
+
+    ## Split flow (browser wallet signs)
+
+    In a web app the SDK runs on **your backend**, but the signatures come from the user's
+    wallet in the **browser**. Use the lower-level methods and hop between the two:
+
+    <Steps>
+      <Step title="Backend: prepare">
+        Cesto builds the unsigned transactions and retains the canonical bytes for **~60
+        seconds**.
+
+        ```ts
+        const prepared = await cesto.open.prepare({
+          user: userWalletAddress,
+          slug: 'stable-genius',
+          amount: 100_000_000n,
+        });
+        // { executionId, transactions: [{ nodeId, transaction }], expiresAt }
+        ```
+
+        Send `prepared.transactions` to the browser immediately — the set expires ~60s
+        after prepare. Slippage uses the platform default; there is no slippage parameter.
+      </Step>
+      <Step title="Browser: the user signs">
+        Sign the transactions **as-is** — any modified byte is rejected at submit.
+
+        ```ts
+        import { VersionedTransaction } from '@solana/web3.js';
+
+        const signed = await Promise.all(
+          prepared.transactions.map(async ({ nodeId, transaction }) => {
+            const tx = VersionedTransaction.deserialize(Buffer.from(transaction, 'base64'));
+            const signedTx = await wallet.signTransaction(tx); // wallet-adapter
+            return { nodeId, signedTransaction: Buffer.from(signedTx.serialize()).toString('base64') };
+          }),
+        );
+        // POST { executionId, transactions: signed } back to your backend
+        ```
+      </Step>
+      <Step title="Backend: submit and wait">
+        ```ts
+        await cesto.positions.submit({
+          executionId: prepared.executionId,
+          transactions: signed,
+        });
+
+        const result = await cesto.positions.waitForExecution(prepared.executionId, {
+          timeoutMs: 120_000,
+        });
+        ```
+      </Step>
+    </Steps>
+
+    ## Method reference
+
+    ### `open.prepare(params)`
+
+    <ParamField path="user" type="string" required>
+      Solana address of the wallet opening the position — it signs and pays for every
+      transaction.
+    </ParamField>
+    <ParamField path="slug" type="string" required>
+      Basket to open, by slug (a product id also works).
+    </ParamField>
+    <ParamField path="amount" type="bigint" required>
+      Amount to invest, in input-token base units. Serialized as a decimal string on the
+      wire.
+    </ParamField>
+
+    Returns `{ executionId, transactions, expiresAt }`.
+
+    ### `positions.submit(params)`
+
+    <ParamField path="executionId" type="string" required>
+      Execution from the prepare response.
+    </ParamField>
+    <ParamField path="transactions" type="{ nodeId, signedTransaction }[]" required>
+      Every prepared transaction, signed by the wallet (base64).
+    </ParamField>
+
+    <Note>
+      `submit` is **single-use and never retried automatically**. If it times out
+      client-side it may still have been accepted — poll `getExecution` instead of
+      re-sending. An expired (~60s), replaced, or already-submitted preparation fails with
+      a `409`; run prepare again.
+    </Note>
+
+    ### `positions.getExecution(executionId)` / `positions.waitForExecution(executionId, options?)`
+
+    `getExecution` fetches the current status with per-transaction outcomes.
+    `waitForExecution` polls it until a terminal status and throws a `CestoError` on
+    timeout (the execution keeps running server-side). These are shared with the managed
+    flow — managed executions poll through the same methods.
+
+    <ParamField path="pollIntervalMs" type="number" default="2500">
+      Delay between status polls.
+    </ParamField>
+    <ParamField path="timeoutMs" type="number" default="180000">
+      Max total wait before throwing.
+    </ParamField>
+
+    ## Security model
+
+    - **Ownership proof = the signatures.** Only the wallet holder can produce a valid
+      signature over the prepared message bytes; prepare takes the address only and creates
+      nothing durable.
+    - **Tamper-proof submit.** Cesto keeps the canonical unsigned transactions it built. On
+      submit, each transaction's message bytes must be **byte-identical** — only signatures
+      may be added. Any changed instruction, account, or fee payer is rejected.
+    - **Single-use, short-lived preparations.** One submit per prepare, ~60s expiry, and a
+      new prepare for the same wallet + product replaces the previous one.
+    - **Quotes locked at prepare.** The swap quote is baked into the prepared transaction;
+      slippage tolerance protects against drift between prepare and submit.
+    - **Keys stay server-side.** In the one-call flow the keypair never leaves your
+      backend — load it from the environment (`process.env`), never hardcode it, and never
+      send `signedTransaction`s or key material anywhere but back to Cesto's submit
+      endpoint.
+  </Tab>
+</Tabs>
 
 <Warning>
-  Opening requires a **write-scoped** API key (read-only keys get a `403` on write routes).
-  Cesto **sponsors the network gas and account (ATA) rent**, so the user's wallet needs
-  **no SOL** — only the basket's **input token (USDC)** to invest (plus the platform fee).
+  **Examples on this page move real mainnet funds.** Open positions run on Solana mainnet
+  with real USDC — test with small amounts first.
 </Warning>
-
-<Note>
-  Gas sponsorship is on by default. If a deployment runs without a configured sponsor, the
-  wallet falls back to paying its own gas and must then hold a little SOL.
-</Note>
-
-There is no separate ownership challenge: **the signatures are the ownership proof**.
-Prepare only needs the wallet *address*.
-
-<Note>
-  Which flow you use depends on your wallet setup — see
-  [Integration Models](/sdk/integration-models). Backends that can sign (your own Privy or a
-  keypair you custody) use the one-call flow; browser EOAs like Phantom / Solflare use the
-  split flow.
-</Note>
-
-## One-call flow (you hold the keypair)
-
-When your backend controls the signing keypair — bots, agents, services you custody —
-`open.execute` runs the whole flow in one call. You supply a `signTransactions` callback,
-so the SDK never touches the private key. The SDK ships a `signWithKeypair` helper that
-builds that callback from your keypair:
-
-```ts
-import { Cesto, signWithKeypair } from '@cesto/sdk';
-import { Keypair } from '@solana/web3.js';
-
-const cesto = new Cesto({ apiKey: process.env.CESTO_API_KEY }); // write-scoped key
-
-const keypair = Keypair.fromSecretKey(secret); // a wallet YOU control, funded with USDC
-const wallet = keypair.publicKey.toBase58();
-
-const result = await cesto.open.execute({
-  user: wallet,
-  slug: 'stable-genius',
-  amount: 100_000_000n, // input base units (e.g. 100 USDC @ 6 decimals)
-  signTransactions: signWithKeypair(keypair), // signs each prepared leg locally
-});
-result.status;       // 'COMPLETED' | 'PARTIALLY_COMPLETED' | 'FAILED'
-result.transactions; // per-leg { nodeId, ok, signature?, error? }
-```
-
-<Note>
-  `signWithKeypair` needs `@solana/web3.js` (an optional peer dependency — install it
-  alongside `@cesto/sdk`). Prefer to sign yourself? Pass any `async (transactions) => …`
-  callback that returns one `{ nodeId, signedTransaction }` per prepared leg — only
-  signatures may be added, the message bytes must stay byte-identical.
-</Note>
-
-## Split flow (browser wallet signs)
-
-In a web app the SDK runs on **your backend**, but the signatures come from the user's
-wallet in the **browser**. Use the lower-level methods and hop between the two:
-
-<Steps>
-  <Step title="Backend: prepare">
-    Cesto builds the unsigned transactions and retains the canonical bytes for **~60 seconds**.
-
-    ```ts
-    const prepared = await cesto.open.prepare({
-      user: userWalletAddress,
-      slug: 'stable-genius',
-      amount: 100_000_000n,
-    });
-    // { executionId, transactions: [{ nodeId, transaction }], expiresAt }
-    ```
-
-    Send `prepared.transactions` to the browser immediately — the set expires ~60s after
-    prepare. Slippage uses the platform default; there is no slippage parameter.
-  </Step>
-  <Step title="Browser: the user signs">
-    Sign the transactions **as-is** — any modified byte is rejected at submit.
-
-    ```ts
-    import { VersionedTransaction } from '@solana/web3.js';
-
-    const signed = await Promise.all(
-      prepared.transactions.map(async ({ nodeId, transaction }) => {
-        const tx = VersionedTransaction.deserialize(Buffer.from(transaction, 'base64'));
-        const signedTx = await wallet.signTransaction(tx); // wallet-adapter
-        return { nodeId, signedTransaction: Buffer.from(signedTx.serialize()).toString('base64') };
-      }),
-    );
-    // POST { executionId, transactions: signed } back to your backend
-    ```
-  </Step>
-  <Step title="Backend: submit and wait">
-    ```ts
-    await cesto.positions.submit({
-      executionId: prepared.executionId,
-      transactions: signed,
-    });
-
-    const result = await cesto.positions.waitForExecution(prepared.executionId, {
-      timeoutMs: 120_000,
-    });
-    ```
-  </Step>
-</Steps>
-
-## Method reference
-
-### `open.prepare(params)`
-
-<ParamField path="user" type="string" required>
-  Solana address of the wallet opening the position — it signs and pays for every transaction.
-</ParamField>
-<ParamField path="slug" type="string" required>
-  Basket to open, by slug (a product id also works).
-</ParamField>
-<ParamField path="amount" type="bigint" required>
-  Amount to invest, in input-token base units. Serialized as a decimal string on the wire.
-</ParamField>
-
-Returns `{ executionId, transactions, expiresAt }`.
-
-### `positions.submit(params)`
-
-<ParamField path="executionId" type="string" required>
-  Execution from the prepare response.
-</ParamField>
-<ParamField path="transactions" type="{ nodeId, signedTransaction }[]" required>
-  Every prepared transaction, signed by the wallet (base64).
-</ParamField>
-
-<Note>
-  `submit` is **single-use and never retried automatically**. If it times out client-side
-  it may still have been accepted — poll `getExecution` instead of re-sending. An expired
-  (~60s), replaced, or already-submitted preparation fails with a `409`; run prepare again.
-</Note>
-
-### `positions.getExecution(executionId)` / `positions.waitForExecution(executionId, options?)`
-
-`getExecution` fetches the current status with per-transaction outcomes. `waitForExecution`
-polls it until a terminal status and throws a `CestoError` on timeout (the execution keeps
-running server-side).
-
-<ParamField path="pollIntervalMs" type="number" default="2500">
-  Delay between status polls.
-</ParamField>
-<ParamField path="timeoutMs" type="number" default="180000">
-  Max total wait before throwing.
-</ParamField>
 
 ## Execution results
 
-Terminal statuses are `COMPLETED`, `PARTIALLY_COMPLETED`, and `FAILED`.
+Terminal statuses are `COMPLETED`, `PARTIALLY_COMPLETED`, and `FAILED` — identical in both
+models.
 
 <Warning>
   **Partial completion is real.** A multi-token open is several independent transactions
@@ -193,25 +249,13 @@ are self-custody and do **not** appear in `positions.getPositions`.
 | Situation | What you get |
 | --- | --- |
 | Read-only key on a write route | `403 PermissionDeniedError` |
-| Prepared txs older than ~60s / already submitted / replaced | `409 ConflictError` at submit → re-`prepare` |
-| Submitted tx bytes altered vs prepared | `400` — only signatures may be added |
-| Signed by a different wallet than prepared for | `400` — the wallet's signature must verify |
+| BYOW: prepared txs older than ~60s / already submitted / replaced | `409 ConflictError` at submit → re-`prepare` |
+| BYOW: submitted tx bytes altered vs prepared | `400` — only signatures may be added |
+| BYOW: signed by a different wallet than prepared for | `400` — the wallet's signature must verify |
+| Managed: `user` isn't one of your key's provisioned users | `404`, code `MANAGED_USER_NOT_FOUND` |
 | Another execution in flight for this wallet + product | conflict at prepare/submit |
 | Wallet has insufficient input-token (USDC) balance | leg fails at landing → `FAILED` / `PARTIALLY_COMPLETED` |
 | `submit` timed out client-side | do **not** re-send; poll `getExecution` |
-
-## Security model
-
-- **Ownership proof = the signatures.** Only the wallet holder can produce a valid
-  signature over the prepared message bytes; prepare takes the address only and creates
-  nothing durable.
-- **Tamper-proof submit.** Cesto keeps the canonical unsigned transactions it built. On
-  submit, each transaction's message bytes must be **byte-identical** — only signatures may
-  be added. Any changed instruction, account, or fee payer is rejected.
-- **Single-use, short-lived preparations.** One submit per prepare, ~60s expiry, and a new
-  prepare for the same wallet + product replaces the previous one.
-- **Quotes locked at prepare.** The swap quote is baked into the prepared transaction;
-  slippage tolerance protects against drift between prepare and submit.
 
 ## Constraints
 

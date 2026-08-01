@@ -11,7 +11,8 @@ browser signing flow — you call `users.create` once per user, fund the wallet,
 close / rebalance by user reference.
 
 This is the path to pick when your end users only have an **EVM wallet** (e.g. on Base) and
-you don't want to run Solana wallet infrastructure.
+you don't want to run Solana wallet infrastructure. It is also the **recommended** path in
+every how-to on this site — the "Managed" tab comes first wherever both flows are shown.
 
 ```
 1. provision   your server ─▶ Cesto     users.create({ evmWalletAddress }) → { userId, solanaAddress, ... }
@@ -20,10 +21,23 @@ you don't want to run Solana wallet infrastructure.
 4. poll        your server ─▶ Cesto     poll the execution until COMPLETED / PARTIALLY_COMPLETED / FAILED
 ```
 
+## Prerequisites
+
+- **A write-scoped API key.** Every call on this page except `users.get` is a write route —
+  read-only keys get a `403` (`PermissionDeniedError`). Keys are created and scoped in the
+  Cesto dashboard or by the Cesto team — see [Authentication](/sdk/authentication).
+- **A provisioning quota.** Each write key has a managed-user quota (contact the Cesto team
+  to set or raise it). When it's full, `users.create` fails with a `403`, code
+  `PROVISIONING_QUOTA_EXCEEDED`.
+- **Server-side execution.** Managed calls run from **your backend** — the API key must
+  never ship to a browser or mobile client. Read it from the environment
+  (`process.env.CESTO_API_KEY`), never hardcode it, and keep it out of version control.
+- **USDC on Base** in the user's EVM wallet (or another supported funding route) — this is
+  what gets bridged in and invested.
+
 <Warning>
-  All managed endpoints require a **write-scoped** API key (read-only keys get a `403` on
-  write routes). Cesto **sponsors the network gas and ATA rent**, so managed wallets need
-  **no SOL** — only **USDC** to invest.
+  **These examples move real mainnet funds.** Bridging and investing run on Base and Solana
+  mainnet with real USDC. Test with small amounts first.
 </Warning>
 
 ## Provisioning users
@@ -82,57 +96,88 @@ existing [bridge flow](/sdk/bridging) (Base → Solana, Circle CCTP). Two things
 - `recipient` is the provisioned **`solanaAddress`**.
 - `sourceAddress` is the **user's EVM wallet** — the user signs the burn on Base, as usual.
 
-```ts
-const { transferId, burn } = await cesto.bridge.initiate({
-  sourceChain: 'base',
-  destChain: 'solana',
-  amount: '10000000', // 10 USDC, base units as a string
-  recipient: user.solanaAddress,
-  sourceAddress: user.evmWalletAddress, // signs the burn on Base
-  mode: 'fast',
-});
+<Tabs>
+  <Tab title="Managed">
+    Funding is the one step that looks the same in both models: the funds come from the
+    **user's EVM wallet**, so the user always signs the EVM-side burn. The managed part is
+    only the destination — the provisioned `solanaAddress`.
 
-// user signs + lands the burn on Base, then:
-await cesto.bridge.submitBurn(transferId, { burnTxHash });
-const done = await cesto.bridge.waitForTransfer(transferId);
-```
+    ```ts
+    const { transferId, burn } = await cesto.bridge.initiate({
+      sourceChain: 'base',
+      destChain: 'solana',
+      amount: '10000000', // 10 USDC, base units as a string
+      recipient: user.solanaAddress,
+      sourceAddress: user.evmWalletAddress, // signs the burn on Base
+      mode: 'fast',
+    });
 
-When the transfer completes, invest what **arrived** — `done.netOut` — not the burn amount
-(`fast` mode deducts its fee at mint). Full bridge mechanics, modes, and errors are in
-[Bridging (CCTP)](/sdk/bridging).
+    // user signs + lands the burn on Base, then:
+    await cesto.bridge.submitBurn(transferId, { burnTxHash });
+    const done = await cesto.bridge.waitForTransfer(transferId);
+    ```
+
+    When the transfer completes, invest what **arrived** — `done.netOut` — not the burn
+    amount (`fast` mode deducts its fee at mint).
+  </Tab>
+  <Tab title="BYOW">
+    Identical flow, but `recipient` is the user's own Solana wallet (not provisioned by
+    Cesto), and the arrived USDC is invested via the client-signed
+    [open flow](/sdk/open-position). The BYOW wallet needs **no SOL** for investing — Cesto
+    sponsors gas — but it does need a little SOL (~0.005) if it later **burns back out**
+    (see [Bridging → Solana-source burns](/sdk/bridging#solana-source-burns)).
+  </Tab>
+</Tabs>
+
+Full bridge mechanics, modes, and errors are in [Bridging (CCTP)](/sdk/bridging).
 
 ## Opening, closing, rebalancing
 
 Managed positions are **custodial**: Cesto signs for the provisioned wallet server-side, so
 no user signature, `signTransactions` callback, or split flow is needed. Each call returns
-an `{ executionId }` and the execution runs in the background:
+an `{ executionId }` and the execution runs in the background. All three are **write**
+routes.
 
-```ts
-const { executionId } = await cesto.managed.open({
-  user: user.solanaAddress,
-  slug: 'stable-genius',
-  amount: 10_000_000n, // bigint, input-token base units (10 USDC @ 6 decimals)
-});
+<Tabs>
+  <Tab title="Managed">
+    ```ts
+    const { executionId } = await cesto.managed.open({
+      user: user.solanaAddress,
+      slug: 'stable-genius',
+      amount: 10_000_000n, // bigint, input-token base units (10 USDC @ 6 decimals)
+    });
 
-await cesto.managed.close({ user: user.solanaAddress, slug: 'stable-genius' });
-await cesto.managed.rebalance({ user: user.solanaAddress, slug: 'stable-genius' });
-```
+    await cesto.managed.close({ user: user.solanaAddress, slug: 'stable-genius' });
+    await cesto.managed.rebalance({ user: user.solanaAddress, slug: 'stable-genius' });
+    ```
 
-The **`user`** field accepts any of your user's identifiers:
+    The **`user`** field accepts any of your user's identifiers:
 
-- the **`externalUserId`** you passed at provisioning,
-- the user's **EVM wallet address**, or
-- the provisioned **Solana address**.
+    - the **`externalUserId`** you passed at provisioning,
+    - the user's **EVM wallet address**, or
+    - the provisioned **Solana address**.
+
+    As with the client-signed flow, **close** sells the user's full holding of the basket
+    (no `amount`, no partial close) and **rebalance** migrates the position to the basket's
+    latest version. `amount` on open is a **bigint** in input-token base units.
+
+    Full reference: [Opening, closing, rebalancing](#opening-closing-rebalancing) on this
+    page — the rest of this section applies to the managed flow.
+  </Tab>
+  <Tab title="BYOW">
+    With a self-custody or partner-controlled Solana wallet, the wallet signs every
+    transaction: `open.execute` / `open.prepare` + `positions.submit` with a
+    `signTransactions` callback (or a browser wallet in the split flow). Walk through it in
+    [Open a Position](/sdk/open-position), [Close a Position](/sdk/close-position), and
+    [Rebalance a Position](/sdk/rebalance-position).
+  </Tab>
+</Tabs>
 
 <Note>
   Managed executions are scoped per API key — one partner never sees another's users or
   executions. A `user` that doesn't resolve to one of **your** provisioned users fails with
   a `404` (code `MANAGED_USER_NOT_FOUND`).
 </Note>
-
-As with the client-signed flow, **close** sells the user's full holding of the basket (no
-`amount`, no partial close) and **rebalance** migrates the position to the basket's latest
-version. `amount` on open is a **bigint** in input-token base units.
 
 ### Waiting for the result
 
@@ -153,7 +198,7 @@ result.transactions; // per-leg { nodeId, ok, signature?, error? }
 `closeAndWait` and `rebalanceAndWait` take the same params as `close` / `rebalance`. To
 poll an execution you kicked off with the plain variants, use the shared
 [`positions.getExecution` / `positions.waitForExecution`](/sdk/open-position#method-reference)
-with the returned `executionId`.
+with the returned `executionId` — polling is identical in both models.
 
 <Warning>
   **Partial completion is real**, exactly as in the client-signed flow: a multi-token open
@@ -163,7 +208,8 @@ with the returned `executionId`.
 
 ## Withdrawing
 
-Withdrawal is the mirror image of funding — and needs **no user signature at all**:
+Withdrawal is the mirror image of funding — and needs **no user signature at all** in the
+managed model:
 
 <Steps>
   <Step title="Close the position">
@@ -172,47 +218,93 @@ Withdrawal is the mirror image of funding — and needs **no user signature at a
   </Step>
   <Step title="Bridge back to EVM">
     Use [`bridge`](/sdk/bridging) with `sourceChain: 'solana'`, `destChain: 'base'`, the
-    managed wallet as `sourceAddress`, and the user's EVM wallet as `recipient`. For a
-    managed Solana source wallet, **Cesto signs and lands the burn itself** (sponsor pays
-    gas): `initiate` returns `{ status: 'BURN_SUBMITTED', burnTxHash, burn: null }`, so skip
-    `submitBurn` and go straight to `waitForTransfer`.
+    managed wallet as `sourceAddress`, and the user's EVM wallet as `recipient`.
   </Step>
 </Steps>
 
-```ts
-await cesto.managed.closeAndWait({ user: user.solanaAddress, slug: 'stable-genius' });
+<Tabs>
+  <Tab title="Managed">
+    For a managed Solana source wallet, **Cesto signs and lands the burn itself** (sponsor
+    pays gas and the CCTP message-account rent — managed wallets hold no SOL): `initiate`
+    returns `{ status: 'BURN_SUBMITTED', burnTxHash, burn: null }`, so skip `submitBurn`
+    and go straight to `waitForTransfer`.
 
-const res = await cesto.bridge.initiate({
-  sourceChain: 'solana',
-  destChain: 'base',
-  amount: '10000000', // 10 USDC
-  recipient: user.evmWalletAddress,
-  sourceAddress: user.solanaAddress, // managed wallet → Cesto signs the burn
-});
+    ```ts
+    await cesto.managed.closeAndWait({ user: user.solanaAddress, slug: 'stable-genius' });
 
-// Managed source wallet: the burn is already signed and landed — res.burnTxHash.
-// Calling submitBurn with the same hash is safe/idempotent, but not needed.
-const done = await cesto.bridge.waitForTransfer(res.transferId);
-done.mintTxHash; // USDC minted to the user's EVM wallet on Base
-```
+    const res = await cesto.bridge.initiate({
+      sourceChain: 'solana',
+      destChain: 'base',
+      amount: '10000000', // 10 USDC
+      recipient: user.evmWalletAddress,
+      sourceAddress: user.solanaAddress, // managed wallet → Cesto signs the burn
+    });
+
+    // Managed source wallet: the burn is already signed and landed — res.burnTxHash.
+    // Calling submitBurn with the same hash is safe/idempotent, but not needed.
+    const done = await cesto.bridge.waitForTransfer(res.transferId);
+    done.mintTxHash; // USDC minted to the user's EVM wallet on Base
+    ```
+  </Tab>
+  <Tab title="BYOW">
+    A self-custody Solana source wallet signs the burn itself — `initiate` returns
+    `{ status: 'BURN_TX_BUILT', burn: { kind: 'solana', transaction, additionalSignerSecrets } }`.
+    Sign the transaction with the wallet **plus** the ephemeral `additionalSignerSecrets`,
+    land it, then `submitBurn`. The signing wallet must hold **~0.005 SOL** for the
+    transaction fee and the CCTP message-account rent — BYOW burns are **not**
+    sponsor-paid. Details: [Bridging → Solana-source burns](/sdk/bridging#solana-source-burns).
+  </Tab>
+</Tabs>
 
 ## Errors
 
 | Situation | What you get |
 | --- | --- |
 | Read-only key on `users.create` / `managed.*` | `403 PermissionDeniedError` |
+| Invalid / missing / revoked API key | `401 AuthenticationError` |
 | Provisioning quota full | `403`, code `PROVISIONING_QUOTA_EXCEEDED` — talk to the Cesto team |
-| `users.create` faster than 10/min | rate-limited — back off and retry |
-| `users.get` for a wallet that isn't your key's user | `404` |
+| Wallet provisioning fails upstream | `500`, code `MANAGED_USER_PROVISIONING_FAILED` — retry; contact Cesto if it persists |
+| `users.create` faster than 10/min | `429 RateLimitError` (`retryAfter` ms) — back off and retry |
+| `users.get` faster than 60/min | `429 RateLimitError` |
+| `users.get` for a wallet that isn't your key's user | `404 NotFoundError` |
 | `managed.*` for a user that isn't your key's | `404`, code `MANAGED_USER_NOT_FOUND` |
 | Managed wallet has insufficient USDC | execution leg fails → `FAILED` / `PARTIALLY_COMPLETED` |
+| Another execution in flight for this user + product | conflict — wait for the running execution to finish |
 
 See [Errors & Retries](/sdk/errors) for the typed error hierarchy and retry behavior.
 
+## Rate limits
+
+Per API key:
+
+| Route | Limit |
+| --- | --- |
+| `users.create` (`POST /sdk/users`) | 10 requests/minute |
+| `users.get` (`GET /sdk/users/:evmWalletAddress`) | 60 requests/minute |
+| `managed.open` / `managed.close` / `managed.rebalance` | 10 requests/minute each |
+
+Exceeding a limit returns `429` (`RateLimitError`) with a `retryAfter` hint. Because
+`users.create` is idempotent, call it on login rather than caching a lookup table of your
+own — 10/minute is ample for user-driven provisioning.
+
+## Security notes
+
+- **Server-side only.** Every managed call carries your API key; never expose it to a
+  browser, mobile app, or logs. Load it from the environment
+  (`process.env.CESTO_API_KEY`), as in every example on this page.
+- **Write scope gates every mutation.** Provisioning, opening, closing, rebalancing, and
+  bridging all require a write-scoped key. Keep a separate read-scoped key for status reads
+  and dashboards if you want least-privilege separation.
+- **No keys to leak on your side.** The managed wallet's key material lives in Cesto's
+  Privy custody and never crosses your infrastructure — there is nothing in your stack to
+  exfiltrate. Treat the API key itself as the sensitive secret.
+- **Per-key isolation.** Users, executions, and bridge transfers are visible only to the
+  API key that created them.
+
 ## End-to-end example
 
-Provision a user, bridge USDC in from their EVM wallet, and open a position — no key
-handling anywhere:
+Provision a user, bridge USDC in from their EVM wallet, open a position, then close it and
+bridge back out — no key handling anywhere on your side:
 
 ```ts
 import { Cesto } from '@cesto/sdk';
@@ -250,13 +342,33 @@ if (burn && burn.kind === 'evm') {
 const done = await cesto.bridge.waitForTransfer(transferId);
 
 // 5. Open — invest what ARRIVED (netOut), not the burn amount. Cesto signs.
-const result = await cesto.managed.openAndWait({
+const opened = await cesto.managed.openAndWait({
   user: user.solanaAddress,
   slug: 'stable-genius',
   amount: BigInt(done.netOut!),
 });
-result.status; // 'COMPLETED' | 'PARTIALLY_COMPLETED' | 'FAILED'
+opened.status; // 'COMPLETED' | 'PARTIALLY_COMPLETED' | 'FAILED'
+
+// 6. Later: close — sells the full holding back to USDC. Cesto signs.
+await cesto.managed.closeAndWait({ user: user.solanaAddress, slug: 'stable-genius' });
+
+// 7. Withdraw: bridge back to the user's EVM wallet.
+//    Managed source wallet → Cesto signs and lands the burn itself.
+const out = await cesto.bridge.initiate({
+  sourceChain: 'solana',
+  destChain: 'base',
+  amount: '10000000', // 10 USDC
+  recipient: userEvmAddress,
+  sourceAddress: user.solanaAddress,
+});
+const withdrawn = await cesto.bridge.waitForTransfer(out.transferId); // skip submitBurn
+withdrawn.mintTxHash; // USDC minted on Base
 ```
+
+<Warning>
+  This flow runs against **Base and Solana mainnet** and moves real USDC. Run it with small
+  amounts until you're confident in the integration.
+</Warning>
 
 ## Related
 

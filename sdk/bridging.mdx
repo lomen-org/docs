@@ -24,7 +24,8 @@ background job.
 <Warning>
   Bridging needs a **write-scoped** API key. It delivers USDC only — investing is a separate
   step and still needs a Solana wallet (see [Bridge, then invest](#bridge-then-invest) and
-  [Integration Models](/sdk/integration-models)).
+  [Integration Models](/sdk/integration-models)). Bridging runs on **mainnet only** — every
+  example on this page moves **real USDC**; test with small amounts first.
 </Warning>
 
 ## Modes
@@ -103,29 +104,64 @@ if (burn && burn.kind === 'evm') {
 
 ### Solana-source burns
 
-A Solana burn returns `burn.kind === 'solana'`: a base64 transaction plus
-**`additionalSignerSecrets`** — ephemeral, single-use keypairs (CCTP's message account) that
-must co-sign alongside the user wallet. They hold no funds:
+How a Solana-side burn gets signed depends on whose wallet is burning:
 
-```ts
-import { Keypair, Transaction } from '@solana/web3.js';
-import bs58 from 'bs58';
+<Tabs>
+  <Tab title="Managed wallet">
+    When `sourceAddress` is a Cesto-managed Solana wallet (provisioned via `users.create`
+    under your API key), Cesto **signs and lands the burn server-side** — the sponsor pays
+    the transaction fee and the CCTP message-account rent, so managed wallets need **no
+    SOL**. `initiate` returns `{ status: 'BURN_SUBMITTED', burnTxHash, burn: null }`
+    instead of an unsigned burn, so skip `submitBurn` (re-submitting the same hash is
+    safe/idempotent) and go straight to `waitForTransfer`:
 
-const tx = Transaction.from(Buffer.from(burn.transaction, 'base64'));
-const extra = burn.additionalSignerSecrets.map((s) => Keypair.fromSecretKey(bs58.decode(s)));
-tx.sign(userKeypair, ...extra);
-const burnTxHash = await connection.sendRawTransaction(tx.serialize());
-await connection.confirmTransaction(burnTxHash, 'confirmed');
-```
+    ```ts
+    const res = await cesto.bridge.initiate({
+      sourceChain: 'solana',
+      destChain: 'base',
+      amount: '10000000', // 10 USDC
+      recipient: userEvmAddress,
+      sourceAddress: user.solanaAddress, // managed wallet → Cesto signs
+    });
 
-<Note>
-  **Managed wallets skip this step.** When `sourceAddress` is a Cesto-managed Solana wallet
-  (provisioned via `users.create` under your API key), Cesto **signs and lands the burn
-  server-side** — sponsor pays gas — and `initiate` returns
-  `{ status: 'BURN_SUBMITTED', burnTxHash, burn: null }` instead of the unsigned burn. Skip
-  `submitBurn` (re-submitting the same hash is safe/idempotent) and go straight to
-  `waitForTransfer`. See [Managed wallets — Withdrawing](/sdk/managed-wallets#withdrawing).
-</Note>
+    // res.status === 'BURN_SUBMITTED', res.burn === null, res.burnTxHash is landed
+    const done = await cesto.bridge.waitForTransfer(res.transferId);
+    ```
+
+    See [Managed wallets — Withdrawing](/sdk/managed-wallets#withdrawing) for the full
+    withdrawal flow.
+  </Tab>
+  <Tab title="BYOW">
+    A self-custody or partner-controlled Solana wallet signs the burn itself. `initiate`
+    returns `burn.kind === 'solana'`: a base64 transaction plus
+    **`additionalSignerSecrets`** — ephemeral, single-use keypairs (CCTP's message account)
+    that must co-sign alongside the user wallet. They hold no funds:
+
+    ```ts
+    import { Keypair, Transaction } from '@solana/web3.js';
+    import bs58 from 'bs58';
+
+    const tx = Transaction.from(Buffer.from(burn.transaction, 'base64'));
+    const extra = burn.additionalSignerSecrets.map((s) => Keypair.fromSecretKey(bs58.decode(s)));
+    tx.sign(userKeypair, ...extra); // userKeypair loaded server-side from process.env
+    const burnTxHash = await connection.sendRawTransaction(tx.serialize());
+    await connection.confirmTransaction(burnTxHash, 'confirmed');
+    await cesto.bridge.submitBurn(transferId, { burnTxHash });
+    ```
+
+    <Warning>
+      **The signing wallet pays the burn's costs.** Unlike managed burns, BYOW Solana burns
+      are **not sponsor-paid**: the signing wallet is the fee payer and the CCTP
+      message-account rent payer, so it must hold **~0.005 SOL** in addition to the USDC
+      being burned. Without it the burn fails to land.
+    </Warning>
+
+    <Note>
+      Treat `additionalSignerSecrets` like any key material: use them **server-side**,
+      immediately, for this burn only — never log, persist, or ship them to a browser.
+    </Note>
+  </Tab>
+</Tabs>
 
 ## The recipient address
 
@@ -136,21 +172,43 @@ needed). `quote`'s `ataExists` tells you which case you're in.
 
 ## Bridge, then invest
 
-Once a transfer completes, open the position **with the arrived amount**:
+Once a transfer completes, open the position **with the arrived amount** (`netOut`, not the
+burn amount — `fast` mode deducts its fee at mint):
 
-```ts
-const done = await cesto.bridge.waitForTransfer(transferId);
+<Tabs>
+  <Tab title="Managed">
+    ```ts
+    const done = await cesto.bridge.waitForTransfer(transferId);
 
-const result = await cesto.open.execute({
-  user: userSolanaWallet,
-  slug: 'stable-genius',
-  amount: BigInt(done.netOut!), // not the burn amount — fast mode deducts its fee
-  signTransactions: signWithKeypair(keypair),
-});
-```
+    const result = await cesto.managed.openAndWait({
+      user: user.solanaAddress, // the managed wallet that received the funds
+      slug: 'stable-genius',
+      amount: BigInt(done.netOut!),
+    });
+    ```
+
+    No signature needed — Cesto signs for the managed wallet. See
+    [Managed Wallets](/sdk/managed-wallets).
+  </Tab>
+  <Tab title="BYOW">
+    ```ts
+    const done = await cesto.bridge.waitForTransfer(transferId);
+
+    const result = await cesto.open.execute({
+      user: userSolanaWallet,
+      slug: 'stable-genius',
+      amount: BigInt(done.netOut!), // not the burn amount — fast mode deducts its fee
+      signTransactions: signWithKeypair(keypair), // keypair loaded server-side from process.env
+    });
+    ```
+
+    See [Open a Position](/sdk/open-position) for the full client-signed flow.
+  </Tab>
+</Tabs>
 
 Withdrawing is the mirror image: [close the position](/sdk/close-position), then bridge
-`solana → base` back to the user's EVM wallet.
+`solana → base` back to the user's EVM wallet (see
+[Solana-source burns](#solana-source-burns) for who signs that burn).
 
 ## Method reference
 
