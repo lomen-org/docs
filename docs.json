@@ -73,6 +73,7 @@
               "sdk/configuration",
               "sdk/products",
               "sdk/positions",
+              "sdk/managed-wallets",
               "sdk/open-position",
               "sdk/close-position",
               "sdk/rebalance-position",

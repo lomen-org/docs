@@ -8,6 +8,12 @@ The SDK opens positions where the end-user's wallet **signs its own transactions
 builds the exact unsigned transactions, the wallet signs them, and Cesto verifies and lands
 them — Cesto never holds the user's key.
 
+<Note>
+  This page covers the **client-signed (BYOW)** flow. If the user's wallet is
+  **Cesto-managed** (provisioned via `users.create`), no signing is needed — use
+  [`cesto.managed.*`](/sdk/managed-wallets) instead.
+</Note>
+
 The flow is **prepare → sign → submit → poll**:
 
 ```

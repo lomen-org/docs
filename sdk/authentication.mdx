@@ -18,29 +18,24 @@ automatically with every request — you never set headers yourself.
 
 ## Providing the key
 
-Pass it explicitly, or set the `CESTO_API_KEY` environment variable and omit it:
+Pass it explicitly to the constructor — typically from an environment variable:
 
-<CodeGroup>
-```ts Explicit
-const cesto = new Cesto({ apiKey: 'cesto_sk_…' });
+```ts
+const cesto = new Cesto({ apiKey: process.env.CESTO_API_KEY });
 ```
 
-```ts From env
-// reads process.env.CESTO_API_KEY
-const cesto = new Cesto();
-```
-</CodeGroup>
-
-If no key is found, the constructor throws.
+The SDK does **not** read environment variables itself — `apiKey` is required, and the
+constructor throws without it.
 
 ## Key scopes
 
 Keys are **read** (default) or **write**-scoped:
 
-- **Read** covers products and position reads (`products.*`, `positions.getPositions`,
-  `positions.getPosition`).
-- **Write** is required for [opening](/sdk/open-position) and
-  [closing](/sdk/close-position) positions
+- **Read** covers products, user lookups, and position reads (`products.*`, `users.get`,
+  `positions.getPositions`, `positions.getPosition`).
+- **Write** is required for [provisioning and managed executions](/sdk/managed-wallets)
+  (`users.create`, `managed.*`) and for client-signed
+  [opening](/sdk/open-position) and [closing](/sdk/close-position) positions
   (`open.*`, `close.*`, `positions.submit`, execution polling). A read-only key gets a
   `403 PermissionDeniedError` on write routes.
 

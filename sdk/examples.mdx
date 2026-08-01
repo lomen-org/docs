@@ -19,6 +19,13 @@ pnpm products
 
 Requires **Node.js 20.6+**.
 
+<Note>
+  The examples repo covers the client-signed (BYOW) flows. For the **managed wallets** flow
+  (`users.create` + `managed.*`, no signing on your side), follow
+  [Managed Wallets](/sdk/managed-wallets) — or adapt the `pnpm open` example by swapping
+  `open.execute` + `signTransactions` for `managed.openAndWait` on a provisioned wallet.
+</Note>
+
 ## What's included
 
 | Example | Run | Docs |

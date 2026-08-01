@@ -1,29 +1,29 @@
 ---
 title: "Integration Models"
 icon: "sitemap"
-description: "Pick the wallet model that fits your users — Cesto-managed Privy, your own Privy, browser EOAs, or cross-chain EVM funding."
+description: "Pick the wallet model that fits your users — managed wallets (Cesto-managed Privy, recommended), your own Privy, browser EOAs, or cross-chain EVM funding."
 ---
 
-Every SDK open, close, and rebalance signs a **Solana transaction from a Solana wallet** —
+Every SDK open, close, and rebalance lands a **Solana transaction from a Solana wallet** —
 that never changes. What differs between partners is two things:
 
 1. **Who provisions and controls the Solana wallet** that signs.
 2. **How the user's funds arrive** on that wallet.
 
-This page maps the common partner setups onto the SDK flows in
-[Open a Position](/sdk/open-position) and [Close a Position](/sdk/close-position), so you can
-tell which path is yours before you write any code.
+This page maps the common partner setups onto the SDK flows — [Managed
+Wallets](/sdk/managed-wallets) for the recommended server-signed path, and [Open a
+Position](/sdk/open-position) / [Close a Position](/sdk/close-position) for the
+client-signed (BYOW) flows — so you can tell which path is yours before you write any code.
 
 <Info>
   Whatever the model, the wallet needs the basket's **input token (USDC)** to open. Cesto
-  **sponsors the network gas and ATA rent** — the wallet needs **no SOL** — and never holds
-  the user's key.
+  **sponsors the network gas and ATA rent** — the wallet needs **no SOL**.
 </Info>
 
 ## The models at a glance
 
 <CardGroup cols={2}>
-  <Card title="Cesto-managed Privy" icon="wand-magic-sparkles">
+  <Card title="Managed wallets (recommended)" icon="wand-magic-sparkles" href="/sdk/managed-wallets">
     Cesto provisions a Solana wallet per user via Privy and signs server-side. You call
     open/close by user — no key handling on your side.
   </Card>
@@ -36,56 +36,53 @@ tell which path is yours before you write any code.
     split `prepare → sign → submit → poll` flow.
   </Card>
   <Card title="Cross-chain (EVM → Solana)" icon="right-left">
-    Users hold USDC on Base. Bridge it in with the SDK's native CCTP bridging, then
-    open/close as normal on Solana.
+    Users hold USDC on Base. Bridge it in with the SDK's native CCTP bridging — naturally
+    paired with a managed wallet as the destination.
   </Card>
 </CardGroup>
 
 | Model | Solana wallet owner | Who signs | SDK flow |
 | --- | --- | --- | --- |
-| Cesto-managed Privy | Cesto (Privy) | Cesto, server-side | Coordinated — see below |
+| Managed wallets (Cesto-managed Privy) | Cesto (Privy) | Cesto, server-side | [`managed.*`](/sdk/managed-wallets) |
 | Your own Privy | You (your Privy app) | Your backend, via Privy | [One-call](/sdk/open-position#one-call-flow-you-hold-the-keypair) |
 | Browser EOA | The end user | The user, in the browser | [Split flow](/sdk/open-position#split-flow-browser-wallet-signs) |
 | Cross-chain (EVM) | Depends on the SVM wallet you map to | Owner of the mapped SVM wallet | Any of the above, after bridging |
 
-## Cesto-managed Privy wallets
+## Managed wallets (Cesto-managed Privy) — recommended
 
 Cesto provisions a **Solana (Privy) wallet per user** and handles signing on its side. Your
-integration only ever deals in the **user's Solana address** — you never touch a private key
-or run a signing callback.
+integration only ever deals in **user references** — an external user id, the user's EVM
+wallet, or the provisioned Solana address — you never touch a private key or run a signing
+callback.
 
-This is the lightest path to integrate, and the one to pick if you don't want to run wallet
-infrastructure yourself.
+This is the lightest path to integrate, and the one to pick if your users only have EVM
+wallets or you don't want to run wallet infrastructure yourself.
 
 <Steps>
-  <Step title="Cesto provisions a wallet for each user">
-    Cesto creates a Privy-backed Solana wallet and returns its address, keyed to your user.
-    You store that Solana address against your user record.
+  <Step title="Provision a wallet for each user">
+    Call [`cesto.users.create({ evmWalletAddress })`](/sdk/managed-wallets#provisioning-users)
+    — idempotent, one wallet per (partner, EVM wallet). Store the returned `solanaAddress`
+    against your user record.
   </Step>
   <Step title="Fund the wallet">
-    Get **USDC** onto the address — via deposit, on-ramp, or a bridge (see
-    [Cross-chain](#cross-chain-users-evm-to-solana) if funds start on an EVM chain). Cesto
-    sponsors gas, so the wallet needs no SOL.
+    The user bridges **USDC** from their EVM wallet into the provisioned address with the
+    [bridge flow](/sdk/bridging) (see [Cross-chain](#cross-chain-users-evm-to-solana)).
+    Cesto sponsors gas, so the wallet needs no SOL.
   </Step>
   <Step title="Open / close by user">
-    Call [`open`](/sdk/open-position) / [`close`](/sdk/close-position) with the user's
-    Solana address. Signing is handled on the Cesto side, so you don't supply a
-    `signTransactions` callback or run the split flow yourself.
+    Call [`managed.open` / `managed.close` / `managed.rebalance`](/sdk/managed-wallets#opening-closing-rebalancing)
+    with the user reference. Signing is handled on the Cesto side — no `signTransactions`
+    callback, no split flow.
   </Step>
 </Steps>
 
-<Note>
-  Provisioning and managed signing are set up **with the Cesto team** — there's no self-serve
-  method for it in the SDK today, the same way [API keys](/sdk/authentication) are issued by
-  the team. Reach out on our [community](https://t.me/cesto_co) or through your Cesto
-  contact to enable it.
-</Note>
+Full reference and an end-to-end example: [Managed Wallets](/sdk/managed-wallets).
 
 ## Bring your own wallet (BYOW)
 
 You already have wallets for your users — either embedded/server wallets in your own Privy
-app, or self-custody browser wallets. Cesto builds the unsigned transactions; **your side
-produces the signatures**.
+app, or self-custody browser wallets — and want them to stay **self-custody**. Cesto builds
+the unsigned transactions; **your side produces the signatures**.
 
 ### Your own Privy
 
@@ -133,53 +130,50 @@ Some partners' users hold funds on **Base**, not Solana. The SDK's
 the user signs one burn on the EVM chain, Cesto attests and mints on Solana) — no
 third-party bridge, no SOL needed on the destination.
 
+Bridging pairs naturally with **managed wallets**: the user's EVM wallet is the provisioning
+key *and* the funding source, so one identifier covers the whole lifecycle.
+
 The pattern:
 
 <Steps>
-  <Step title="Give the user a Solana (SVM) wallet">
-    Provision a Solana wallet for the user — typically a
-    [Cesto-managed Privy wallet](#cesto-managed-privy-wallets), so you don't run Solana
-    wallet infrastructure. This SVM address is the **bridge destination**.
-  </Step>
-  <Step title="Map external ↔ EVM ↔ SVM">
-    Keep the link between the user's identity, their **EVM wallet**, and the **Solana
-    wallet** they'll trade from. In Cesto's data model, the user's external wallet is mapped
-    to their EVM wallet, so a single user is resolvable across chains.
+  <Step title="Provision a managed wallet from the EVM address">
+    `cesto.users.create({ evmWalletAddress })` gives the user a Solana (Privy) wallet keyed
+    to their EVM wallet — no Solana wallet infrastructure on your side. This SVM address is
+    the **bridge destination**.
 
     ```text
-    end user  ──▶  EVM wallet (Base)  ──▶  Cesto SVM (Privy) wallet
-              external mapping                bridge destination
+    end user  ──▶  EVM wallet (Base)  ──▶  Cesto-managed (Privy) Solana wallet
+              provisioning key              bridge destination
     ```
   </Step>
-  <Step title="Bridge USDC into the SVM wallet">
-    Use [`bridge`](/sdk/bridging): `quote → initiate` → the user signs the burn on the EVM
-    chain → `submitBurn → waitForTransfer`. Cesto's relayer pays the Solana-side gas and
-    creates the USDC token account if it's the user's first transfer.
+  <Step title="Bridge USDC into the managed wallet">
+    Use [`bridge`](/sdk/bridging): `quote → initiate` with `recipient` = the provisioned
+    `solanaAddress` and `sourceAddress` = the user's EVM wallet → the user signs the burn on
+    the EVM chain → `submitBurn → waitForTransfer`. Cesto's relayer pays the Solana-side gas
+    and creates the USDC token account if it's the user's first transfer.
   </Step>
   <Step title="Open / close on Solana">
-    Once USDC is on the Solana wallet, it's an ordinary SDK position — call
-    [`open`](/sdk/open-position) / [`close`](/sdk/close-position) with the user's Solana
-    address, investing the **arrived** amount (`netOut`). Read holdings any time with
-    [`positions.getPosition`](/sdk/positions#position-by-product-sdk-positions).
+    Once USDC is on the managed wallet, call
+    [`managed.open` / `managed.close`](/sdk/managed-wallets#opening-closing-rebalancing) with
+    the user reference, investing the **arrived** amount (`netOut`). Read holdings any time
+    with [`positions.getPosition`](/sdk/positions#position-by-product-sdk-positions).
   </Step>
 </Steps>
 
-<Note>
-  The external-wallet → EVM-wallet mapping is maintained **with the Cesto team** — there's no
-  self-serve mapping method in the SDK today. Share how you identify users and their EVM
-  addresses with your Cesto contact to set it up.
-</Note>
+With a BYOW setup the bridge works the same way — `recipient` is the BYOW Solana wallet and
+the arrived funds are invested via the client-signed [open flow](/sdk/open-position).
 
 ## Choosing a model
 
-- **Don't want to run wallet infra?** → [Cesto-managed Privy](#cesto-managed-privy-wallets).
+- **Don't want to run wallet infra, or users only have EVM wallets?** →
+  [Managed wallets](#managed-wallets-cesto-managed-privy--recommended).
 - **Already have Privy embedded/server wallets?** → [Your own Privy](#your-own-privy),
   one-call flow.
 - **Users bring self-custody wallets (Phantom / Solflare)?** →
   [Browser EOA](#browser-eoa-phantom-or-solflare), split flow.
 - **Users' money is on an EVM chain?** →
-  [Cross-chain](#cross-chain-users-evm-to-solana): map, bridge, then one of the above.
+  [Cross-chain](#cross-chain-users-evm-to-solana): provision, bridge, then invest.
 
-Whichever you pick, the open / close / rebalance mechanics, execution results, and error
-handling are the same — see [Open a Position](/sdk/open-position),
-[Rebalance a Position](/sdk/rebalance-position), and [Errors & Retries](/sdk/errors).
+Whichever you pick, execution results and error handling are the same — see [Managed
+Wallets](/sdk/managed-wallets), [Open a Position](/sdk/open-position), [Rebalance a
+Position](/sdk/rebalance-position), and [Errors & Retries](/sdk/errors).

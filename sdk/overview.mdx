@@ -1,12 +1,13 @@
 ---
 title: "Cesto SDK"
 icon: "code"
-description: "A typed, server-side TypeScript client for the Cesto API: baskets, positions, and client-signed open / close / rebalance."
+description: "A typed, server-side TypeScript client for the Cesto API: baskets, positions, managed wallets, and client-signed open / close / rebalance."
 ---
 
 The **Cesto SDK** (`@cesto/sdk`) is a typed TypeScript client for the Cesto API.
 Use it to list and inspect baskets (products), look up a user's positions by their
-Solana wallet, and open, close, or rebalance positions with client-signed transactions —
+Solana wallet, and open, close, or rebalance positions — either on **managed wallets**
+(Cesto provisions and signs, you never touch a key) or with client-signed transactions —
 all behind a single API key.
 
 <CardGroup cols={2}>
@@ -16,8 +17,11 @@ all behind a single API key.
   <Card title="Positions" icon="wallet">
     Read a user's positions by wallet, and live per-basket holdings for SDK positions.
   </Card>
+  <Card title="Managed wallets" icon="wand-magic-sparkles">
+    Cesto provisions a Privy-backed Solana wallet per user and signs server-side — open, close, and rebalance by user reference, no key handling.
+  </Card>
   <Card title="Open, Close & Rebalance" icon="right-left">
-    Open, close, and rebalance positions where the user's wallet signs its own transactions — Cesto never holds the key.
+    The self-custody alternative: open, close, and rebalance positions where the user's wallet signs its own transactions — Cesto never holds the key.
   </Card>
   <Card title="Bridging (CCTP)" icon="bridge">
     Bridge native USDC between EVM chains and Solana — the user signs once on the source chain, Cesto handles the rest.
@@ -79,6 +83,14 @@ const position = await cesto.positions.getPosition({
   user: 'EXTERNAL_SOLANA_ADDRESS',
   slug: 'stable-genius',
 });
+
+// Managed wallets (write-scoped key): provision a user, then invest — Cesto signs
+const user = await cesto.users.create({ evmWalletAddress: '0xUserEvmWallet' });
+const { executionId } = await cesto.managed.open({
+  user: user.solanaAddress,
+  slug: 'stable-genius',
+  amount: 10_000_000n, // 10 USDC @ 6 decimals
+});
 ```
 
 <Note>
@@ -86,16 +98,21 @@ const position = await cesto.positions.getPosition({
 </Note>
 
 <Note>
-  Integrating for partner users? [Integration Models](/sdk/integration-models) covers the
-  wallet setups — Cesto-managed Privy, your own Privy, browser EOAs (Phantom / Solflare), and
-  cross-chain EVM funding — so you can pick the path that fits your users.
+  Integrating for partner users? The **managed wallets** flow is the recommended path —
+  Cesto provisions and signs, you never touch a key: [Managed
+  Wallets](/sdk/managed-wallets). [Integration Models](/sdk/integration-models) compares it
+  with the self-custody setups — your own Privy, browser EOAs (Phantom / Solflare), and
+  cross-chain EVM funding.
 </Note>
 
 ## Next steps
 
 <CardGroup cols={2}>
   <Card title="Integration Models" icon="sitemap" href="/sdk/integration-models">
-    Choose a wallet model: managed Privy, your own Privy, EOAs, or cross-chain.
+    Choose a wallet model: managed wallets, your own Privy, EOAs, or cross-chain.
+  </Card>
+  <Card title="Managed Wallets" icon="wand-magic-sparkles" href="/sdk/managed-wallets">
+    Cesto-managed Privy wallets, signed server-side — the recommended flow.
   </Card>
   <Card title="Authentication" icon="key" href="/sdk/authentication">
     Get a key and start making requests.

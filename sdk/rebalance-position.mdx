@@ -10,6 +10,12 @@ Rebalancing migrates a wallet's position from the version it currently holds to 
 `NVDAon → QQQon`) — not selling to USDC and rebuying. Like open and close, it is
 **self-custody**: the user's wallet signs every transaction and Cesto never holds the key.
 
+<Note>
+  This page covers the **client-signed (BYOW)** flow. If the user's wallet is
+  **Cesto-managed** (provisioned via `users.create`), no signing is needed — use
+  [`cesto.managed.rebalance`](/sdk/managed-wallets) instead.
+</Note>
+
 Because every swap's input is the wallet's **current on-chain balance** (known at prepare
 time), the whole set is built, signed, and submitted in **one batch** — exactly like an
 [open](/sdk/open-position). The flow is the same **prepare → sign → submit → poll**, with no
