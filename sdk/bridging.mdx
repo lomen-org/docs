@@ -77,7 +77,7 @@ const { transferId, burn } = await cesto.bridge.initiate({
 });
 
 // 3. The user signs on the source chain (viem example)
-if (burn.kind === 'evm') {
+if (burn && burn.kind === 'evm') {
   if (burn.approvalTx) {
     const hash = await walletClient.sendTransaction(burn.approvalTx);
     await publicClient.waitForTransactionReceipt({ hash });
@@ -117,6 +117,15 @@ tx.sign(userKeypair, ...extra);
 const burnTxHash = await connection.sendRawTransaction(tx.serialize());
 await connection.confirmTransaction(burnTxHash, 'confirmed');
 ```
+
+<Note>
+  **Managed wallets skip this step.** When `sourceAddress` is a Cesto-managed Solana wallet
+  (provisioned via `users.create` under your API key), Cesto **signs and lands the burn
+  server-side** — sponsor pays gas — and `initiate` returns
+  `{ status: 'BURN_SUBMITTED', burnTxHash, burn: null }` instead of the unsigned burn. Skip
+  `submitBurn` (re-submitting the same hash is safe/idempotent) and go straight to
+  `waitForTransfer`. See [Managed wallets — Withdrawing](/sdk/managed-wallets#withdrawing).
+</Note>
 
 ## The recipient address
 
@@ -166,20 +175,27 @@ Withdrawing is the mirror image: [close the position](/sdk/close-position), then
 Returns `{ mode, amount, maxFee, estimatedFee, netOut, etaSeconds, minFinalityThreshold, ataExists? }`.
 Creates nothing.
 
-### `bridge.initiate(params)` → `{ transferId, status, burn }`
+### `bridge.initiate(params)` → `{ transferId, status, burn, burnTxHash? }`
 
 All `quote` fields (recipient is **required** here), plus:
 
 <ParamField path="sourceAddress" type="string" required>
-  Source-chain wallet that will sign the burn.
+  Source-chain wallet that will sign the burn — or a Cesto-managed Solana wallet, in which
+  case Cesto signs for it.
 </ParamField>
 <ParamField path="externalUserId" type="string">
   Your user reference, stored on the transfer for reconciliation.
 </ParamField>
 
-`burn` is `{ kind: 'evm', chainId, approvalTx?, burnTx }` or
-`{ kind: 'solana', transaction, additionalSignerSecrets }`. `approvalTx` is present only
-when the current USDC allowance is insufficient — confirm it before `burnTx`.
+Two response shapes, distinguished by `status`:
+
+- **`status: 'BURN_TX_BUILT'`** (default) — `burn` is
+  `{ kind: 'evm', chainId, approvalTx?, burnTx }` or
+  `{ kind: 'solana', transaction, additionalSignerSecrets }`. `approvalTx` is present only
+  when the current USDC allowance is insufficient — confirm it before `burnTx`.
+- **`status: 'BURN_SUBMITTED'`** (managed Solana source wallet) — Cesto signed and landed
+  the burn itself, sponsor paying gas: `burn` is `null` and `burnTxHash` holds the landed
+  burn signature. Skip `submitBurn` and poll `waitForTransfer`.
 
 ### `bridge.submitBurn(transferId, { burnTxHash })`
 
@@ -234,6 +250,8 @@ with the `transferId`.
 ## Security model
 
 - **Non-custodial burn** — Cesto builds the burn unsigned; only the user's wallet signs.
+  (Exception: Cesto-managed Solana wallets, which Cesto signs for by design — the key never
+  leaves Cesto's custody.)
 - **Gas-only relayer** — the destination mint is permissionless by protocol design; the
   relayer pays gas but can only deliver to the `mintRecipient` baked into the message.
 - **Verified before driven** — every burn is matched against Circle's attested message

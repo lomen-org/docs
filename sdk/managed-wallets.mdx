@@ -163,7 +163,7 @@ with the returned `executionId`.
 
 ## Withdrawing
 
-Withdrawal is the mirror image of funding:
+Withdrawal is the mirror image of funding — and needs **no user signature at all**:
 
 <Steps>
   <Step title="Close the position">
@@ -171,11 +171,30 @@ Withdrawal is the mirror image of funding:
     wallet.
   </Step>
   <Step title="Bridge back to EVM">
-    Use [`bridge`](/sdk/bridging) with `sourceChain: 'solana'`, `destChain: 'base'`, and
-    the user's EVM wallet as `recipient`. The managed wallet's USDC lands back on the
-    user's EVM wallet.
+    Use [`bridge`](/sdk/bridging) with `sourceChain: 'solana'`, `destChain: 'base'`, the
+    managed wallet as `sourceAddress`, and the user's EVM wallet as `recipient`. For a
+    managed Solana source wallet, **Cesto signs and lands the burn itself** (sponsor pays
+    gas): `initiate` returns `{ status: 'BURN_SUBMITTED', burnTxHash, burn: null }`, so skip
+    `submitBurn` and go straight to `waitForTransfer`.
   </Step>
 </Steps>
+
+```ts
+await cesto.managed.closeAndWait({ user: user.solanaAddress, slug: 'stable-genius' });
+
+const res = await cesto.bridge.initiate({
+  sourceChain: 'solana',
+  destChain: 'base',
+  amount: '10000000', // 10 USDC
+  recipient: user.evmWalletAddress,
+  sourceAddress: user.solanaAddress, // managed wallet → Cesto signs the burn
+});
+
+// Managed source wallet: the burn is already signed and landed — res.burnTxHash.
+// Calling submitBurn with the same hash is safe/idempotent, but not needed.
+const done = await cesto.bridge.waitForTransfer(res.transferId);
+done.mintTxHash; // USDC minted to the user's EVM wallet on Base
+```
 
 ## Errors
 
@@ -217,7 +236,7 @@ const { transferId, burn } = await cesto.bridge.initiate({
 });
 
 // 3. The user signs + lands the burn on Base (their wallet, e.g. via viem)
-if (burn.kind === 'evm') {
+if (burn && burn.kind === 'evm') {
   if (burn.approvalTx) {
     const hash = await walletClient.sendTransaction(burn.approvalTx);
     await publicClient.waitForTransactionReceipt({ hash });
