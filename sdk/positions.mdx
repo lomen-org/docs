@@ -4,22 +4,22 @@ icon: "wallet"
 description: "Read positions: account positions by wallet, and live SDK position holdings by product."
 ---
 
-`cesto.positions` has two reads: `getPositions` for a user's **Cesto-account** positions,
-and `getPosition` for the live, on-chain position in one basket — the position view for
+`cesto.positions` has two reads: `positions.list` for a user's **Cesto-account** positions,
+and `getHoldings` for the live, on-chain position in one basket — the position view for
 [SDK-opened positions](/sdk/open-position).
 
 ## Get all positions
 
-`cesto.positions.getPositions` returns a user's open and closing positions, resolved from
+`cesto.positions.list` returns a user's open and closing positions, resolved from
 their **external Solana wallet address**, with no end-user login required.
 
 ```ts
-const { positions, pendingClosePositions } = await cesto.positions.getPositions({
-  user: 'EXTERNAL_SOLANA_ADDRESS',
+const { positions, pendingClosePositions } = await cesto.positions.list({
+  wallet: 'EXTERNAL_SOLANA_ADDRESS',
 });
 ```
 
-<ParamField path="user" type="string" required>
+<ParamField path="wallet" type="string" required>
   External Solana wallet address to look up.
 </ParamField>
 
@@ -32,23 +32,23 @@ const { positions, pendingClosePositions } = await cesto.positions.getPositions(
 
 <Note>
   A wallet with no Cesto account returns an empty result
-  (`{ positions: [], pendingClosePositions: [] }`) and is **not** an error. The `user`
+  (`{ positions: [], pendingClosePositions: [] }`) and is **not** an error. The `wallet`
   argument is required; an empty value throws before any request is made.
 
   This endpoint reads Cesto **account** positions (opened in the Cesto app). Positions
-  opened via the SDK are self-custody and do **not** appear here — use `getPosition` below.
+  opened via the SDK are self-custody and do **not** appear here — use `getHoldings` below.
 </Note>
 
 ## Position by product (SDK positions)
 
-`cesto.positions.getPosition` returns the wallet's **live position in one basket**, read
+`cesto.positions.getHoldings` returns the wallet's **live position in one basket**, read
 from on-chain balances of the basket's constituent tokens — exactly what a
 [close](/sdk/close-position) would sell. Works with a read-only key.
 
 ```ts
-const position = await cesto.positions.getPosition({
-  user: 'SOLANA_ADDRESS',
-  slug: 'stable-genius',
+const position = await cesto.positions.getHoldings({
+  wallet: 'SOLANA_ADDRESS',
+  product: 'stable-genius',
 });
 
 position.hasPosition;   // true when the wallet holds any of the basket's tokens
@@ -57,11 +57,11 @@ position.holdings;      // [{ mint, symbol, name, amount /* base units */, decim
 position.lastExecution; // { executionId, type, status, startedAt, completedAt } | null
 ```
 
-<ParamField path="user" type="string" required>
+<ParamField path="wallet" type="string" required>
   Solana address to read.
 </ParamField>
-<ParamField path="slug" type="string" required>
-  Basket to read, by slug (a product id also works).
+<ParamField path="product" type="string" required>
+  Basket to read — product id or slug.
 </ParamField>
 
 <ResponseField name="holdings" type="Holding[]">

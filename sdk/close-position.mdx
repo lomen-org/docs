@@ -6,7 +6,7 @@ description: "Close a basket position — one call on a managed wallet, or clien
 
 Closing sells the wallet's **full holding** of a basket's tokens back to USDC. It is
 balance-driven — whatever of the basket the wallet holds gets closed, exactly what
-[`positions.getPosition`](/sdk/positions#position-by-product-sdk-positions) reports. There
+[`positions.getHoldings`](/sdk/positions#position-by-product-sdk-positions) reports. There
 is no `amount` and no partial close. Both models share this semantics; they differ only in
 who signs.
 
@@ -20,16 +20,16 @@ who signs.
 
     const cesto = new Cesto({ apiKey: process.env.CESTO_API_KEY }); // write-scoped key, server-side only
 
-    const result = await cesto.managed.closeAndWait({
+    const result = await cesto.close.startAndWait({
       user: user.solanaAddress, // or the externalUserId / EVM wallet you provisioned with
-      slug: 'stable-genius',
+      product: 'stable-genius',
     });
     result.status;       // 'COMPLETED' | 'PARTIALLY_COMPLETED' | 'FAILED'
     result.transactions; // per-leg { nodeId, ok, signature?, error? }
     ```
 
     A `PARTIALLY_COMPLETED` close means some legs sold and some didn't; a fresh
-    `managed.close` targets exactly what's left. To get the USDC back to the user's EVM
+    `close.start` targets exactly what's left. To get the USDC back to the user's EVM
     wallet afterwards, see [Managed Wallets → Withdrawing](/sdk/managed-wallets#withdrawing).
   </Tab>
   <Tab title="BYOW (client-signed)">
@@ -50,8 +50,8 @@ who signs.
     import { signWithKeypair } from '@cesto/sdk';
 
     const result = await cesto.close.execute({
-      user: wallet,
-      slug: 'stable-genius',
+      wallet,
+      product: 'stable-genius',
       signTransactions: signWithKeypair(keypair), // same helper as open — signs each leg locally
     });
     result.status;       // 'COMPLETED' | 'PARTIALLY_COMPLETED' | 'FAILED'
@@ -69,8 +69,8 @@ who signs.
       <Step title="Backend: prepare">
         ```ts
         const prepared = await cesto.close.prepare({
-          user: userWalletAddress,
-          slug: 'stable-genius',
+          wallet: userWalletAddress,
+          product: 'stable-genius',
         });
         // { executionId, transactions: [{ nodeId, transaction }], expiresAt }
         ```
@@ -98,11 +98,11 @@ who signs.
 
     ### `close.prepare(params)`
 
-    <ParamField path="user" type="string" required>
+    <ParamField path="wallet" type="string" required>
       Solana address of the wallet closing the position.
     </ParamField>
-    <ParamField path="slug" type="string" required>
-      Basket to close, by slug (a product id also works).
+    <ParamField path="product" type="string" required>
+      Basket to close — product id or slug.
     </ParamField>
 
     Returns `{ executionId, transactions, expiresAt }`.
@@ -117,6 +117,50 @@ who signs.
   mainnet — test with small amounts first.
 </Warning>
 
+## Existing Cesto users
+
+When the wallet belongs to a **Cesto account holder**, the user approves once by signing a
+message and Cesto closes the position with their Cesto wallet — no per-transaction signing.
+Same `close.start` as the managed flow, plus a `consent` field:
+
+```ts
+const { exists, delegatedSigning } = await cesto.users.lookup({ wallet });
+// delegatedSigning: true → Cesto can sign for this user
+
+const challenge = await cesto.close.createChallenge({
+  wallet: userWalletAddress,
+  product: 'stable-genius',
+});
+
+const signature = await wallet.signMessage(challenge.message); // base58
+
+const { executionId } = await cesto.close.start({
+  user: userWalletAddress,
+  product: challenge.productId,
+  consent: { challengeToken: challenge.challengeToken, signature },
+});
+
+// hasPosition flips false once the close completes
+const holdings = await cesto.positions.getHoldings({
+  wallet: userWalletAddress,
+  product: challenge.productId,
+});
+```
+
+Identical to the [open version](/sdk/open-position#existing-cesto-users) minus the `amount`:
+the approval binds this wallet and this basket, and `start` resolves as soon as the job is
+**queued**. It is **never retried automatically** — the approval is single-use.
+
+<Warning>
+  As on the open path, `positions.getExecution` / `waitForExecution` cannot see executions
+  started with `consent` — they are scoped to the issuing API key, and these are recorded
+  against the user. Track the outcome with
+  [`getHoldings`](/sdk/positions#position-by-product-sdk-positions) instead.
+</Warning>
+
+External wallets that have never used Cesto return `delegatedSigning: false` and take the
+BYOW flow above. See [Users](/sdk/users).
+
 ## Results, errors, and security
 
 Terminal statuses (`COMPLETED`, `PARTIALLY_COMPLETED`, `FAILED`), partial-completion
@@ -124,9 +168,9 @@ semantics, the common-error table, and the security model are identical to openi
 [Open a Position](/sdk/open-position#execution-results). Two close-specific notes:
 
 - A wallet with **no holdings** of the basket has nothing to sell — check
-  `positions.getPosition(...).hasPosition` before preparing a close.
+  `positions.getHoldings(...).hasPosition` before preparing a close.
 - A `PARTIALLY_COMPLETED` close means some legs sold and some didn't; the remaining
-  holdings are still in the wallet and a fresh close (`managed.close` or `close.prepare`)
+  holdings are still in the wallet and a fresh close (`close.start` or `close.prepare`)
   will target exactly what's left.
 
 ## Rebalancing

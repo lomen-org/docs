@@ -43,7 +43,7 @@ client-signed (BYOW) flows — so you can tell which path is yours before you wr
 
 | Model | Solana wallet owner | Who signs | SDK flow |
 | --- | --- | --- | --- |
-| Managed wallets (Cesto-managed Privy) | Cesto (Privy) | Cesto, server-side | [`managed.*`](/sdk/managed-wallets) |
+| Managed wallets (Cesto-managed Privy) | Cesto (Privy) | Cesto, server-side | [`*.start`, no `consent`](/sdk/managed-wallets) |
 | Your own Privy | You (your Privy app) | Your backend, via Privy | [One-call](/sdk/open-position#one-call-flow-you-hold-the-keypair) |
 | Browser EOA | The end user | The user, in the browser | [Split flow](/sdk/open-position#split-flow-browser-wallet-signs) |
 | Cross-chain (EVM) | Depends on the SVM wallet you map to | Owner of the mapped SVM wallet | Any of the above, after bridging |
@@ -70,7 +70,7 @@ wallets or you don't want to run wallet infrastructure yourself.
     Cesto sponsors gas, so the wallet needs no SOL.
   </Step>
   <Step title="Open / close by user">
-    Call [`managed.open` / `managed.close` / `managed.rebalance`](/sdk/managed-wallets#opening-closing-rebalancing)
+    Call [`open.start` / `close.start` / `rebalance.start`](/sdk/managed-wallets#opening-closing-rebalancing)
     with the user reference. Signing is handled on the Cesto side — no `signTransactions`
     callback, no split flow.
   </Step>
@@ -92,8 +92,8 @@ delegate signing to Privy inside the `signTransactions` callback:
 
 ```ts
 const result = await cesto.open.execute({
-  user: userSolanaAddress,
-  slug: 'stable-genius',
+  wallet: userSolanaAddress,
+  product: 'stable-genius',
   amount: 100_000_000n, // 100 USDC @ 6 decimals
   // Receive Cesto's prepared txs, sign each with your Privy wallet, return them base64.
   signTransactions: async (transactions) =>
@@ -154,9 +154,9 @@ The pattern:
   </Step>
   <Step title="Open / close on Solana">
     Once USDC is on the managed wallet, call
-    [`managed.open` / `managed.close`](/sdk/managed-wallets#opening-closing-rebalancing) with
+    [`open.start` / `close.start`](/sdk/managed-wallets#opening-closing-rebalancing) with
     the user reference, investing the **arrived** amount (`netOut`). Read holdings any time
-    with [`positions.getPosition`](/sdk/positions#position-by-product-sdk-positions).
+    with [`positions.getHoldings`](/sdk/positions#position-by-product-sdk-positions).
   </Step>
 </Steps>
 

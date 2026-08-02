@@ -17,7 +17,7 @@ every how-to on this site — the "Managed" tab comes first wherever both flows 
 ```
 1. provision   your server ─▶ Cesto     users.create({ evmWalletAddress }) → { userId, solanaAddress, ... }
 2. fund        user + CCTP              bridge USDC base → solana, recipient = the provisioned solanaAddress
-3. invest      your server ─▶ Cesto     managed.open({ user, slug, amount }) — Cesto signs server-side
+3. invest      your server ─▶ Cesto     open.start({ user, product, amount }) — Cesto signs server-side
 4. poll        your server ─▶ Cesto     poll the execution until COMPLETED / PARTIALLY_COMPLETED / FAILED
 ```
 
@@ -141,15 +141,24 @@ routes.
 <Tabs>
   <Tab title="Managed">
     ```ts
-    const { executionId } = await cesto.managed.open({
+    const { executionId } = await cesto.open.start({
       user: user.solanaAddress,
-      slug: 'stable-genius',
+      product: 'stable-genius',
       amount: 10_000_000n, // bigint, input-token base units (10 USDC @ 6 decimals)
     });
 
-    await cesto.managed.close({ user: user.solanaAddress, slug: 'stable-genius' });
-    await cesto.managed.rebalance({ user: user.solanaAddress, slug: 'stable-genius' });
+    await cesto.close.start({ user: user.solanaAddress, product: 'stable-genius' });
+    await cesto.rebalance.start({ user: user.solanaAddress, product: 'stable-genius' });
     ```
+
+    <Note>
+      `start` is the single server-signed entry point, and it covers two kinds of user.
+      Managed users are the case with **no `consent` field**: Cesto holds their key, so
+      there is nothing for them to sign and your API key is the sole authority. A Cesto
+      account holder — someone with their own wallet — must instead approve each action by
+      signing a challenge, passed as `consent`. See
+      [Existing Cesto users](/sdk/open-position#existing-cesto-users).
+    </Note>
 
     The **`user`** field accepts any of your user's identifiers:
 
@@ -186,16 +195,17 @@ execution-status endpoint until a terminal status — `COMPLETED`, `PARTIALLY_CO
 `FAILED`:
 
 ```ts
-const result = await cesto.managed.openAndWait({
+const result = await cesto.open.startAndWait({
   user: user.solanaAddress,
-  slug: 'stable-genius',
+  product: 'stable-genius',
   amount: 10_000_000n,
 });
 result.status;       // 'COMPLETED' | 'PARTIALLY_COMPLETED' | 'FAILED'
 result.transactions; // per-leg { nodeId, ok, signature?, error? }
 ```
 
-`closeAndWait` and `rebalanceAndWait` take the same params as `close` / `rebalance`. To
+`close.startAndWait` and `rebalance.startAndWait` take the same params as their `start`
+counterparts. To
 poll an execution you kicked off with the plain variants, use the shared
 [`positions.getExecution` / `positions.waitForExecution`](/sdk/open-position#method-reference)
 with the returned `executionId` — polling is identical in both models.
@@ -213,8 +223,8 @@ managed model:
 
 <Steps>
   <Step title="Close the position">
-    `managed.close` (or `closeAndWait`) sells the full holding back to USDC on the managed
-    wallet.
+    `close.start` (or `close.startAndWait`) sells the full holding back to USDC on the
+    managed wallet.
   </Step>
   <Step title="Bridge back to EVM">
     Use [`bridge`](/sdk/bridging) with `sourceChain: 'solana'`, `destChain: 'base'`, the
@@ -230,7 +240,7 @@ managed model:
     and go straight to `waitForTransfer`.
 
     ```ts
-    await cesto.managed.closeAndWait({ user: user.solanaAddress, slug: 'stable-genius' });
+    await cesto.close.startAndWait({ user: user.solanaAddress, product: 'stable-genius' });
 
     const res = await cesto.bridge.initiate({
       sourceChain: 'solana',
@@ -260,14 +270,14 @@ managed model:
 
 | Situation | What you get |
 | --- | --- |
-| Read-only key on `users.create` / `managed.*` | `403 PermissionDeniedError` |
+| Read-only key on `users.create` / `*.start` | `403 PermissionDeniedError` |
 | Invalid / missing / revoked API key | `401 AuthenticationError` |
 | Provisioning quota full | `403`, code `PROVISIONING_QUOTA_EXCEEDED` — talk to the Cesto team |
 | Wallet provisioning fails upstream | `500`, code `MANAGED_USER_PROVISIONING_FAILED` — retry; contact Cesto if it persists |
 | `users.create` faster than 10/min | `429 RateLimitError` (`retryAfter` ms) — back off and retry |
 | `users.get` faster than 60/min | `429 RateLimitError` |
 | `users.get` for a wallet that isn't your key's user | `404 NotFoundError` |
-| `managed.*` for a user that isn't your key's | `404`, code `MANAGED_USER_NOT_FOUND` |
+| `*.start` (no `consent`) for a user that isn't your key's | `404`, code `MANAGED_USER_NOT_FOUND` |
 | Managed wallet has insufficient USDC | execution leg fails → `FAILED` / `PARTIALLY_COMPLETED` |
 | Another execution in flight for this user + product | conflict — wait for the running execution to finish |
 
@@ -281,7 +291,7 @@ Per API key:
 | --- | --- |
 | `users.create` (`POST /sdk/users`) | 10 requests/minute |
 | `users.get` (`GET /sdk/users/:evmWalletAddress`) | 60 requests/minute |
-| `managed.open` / `managed.close` / `managed.rebalance` | 10 requests/minute each |
+| `open.start` / `close.start` / `rebalance.start` (managed) | 10 requests/minute each |
 
 Exceeding a limit returns `429` (`RateLimitError`) with a `retryAfter` hint. Because
 `users.create` is idempotent, call it on login rather than caching a lookup table of your
@@ -342,15 +352,15 @@ if (burn && burn.kind === 'evm') {
 const done = await cesto.bridge.waitForTransfer(transferId);
 
 // 5. Open — invest what ARRIVED (netOut), not the burn amount. Cesto signs.
-const opened = await cesto.managed.openAndWait({
+const opened = await cesto.open.startAndWait({
   user: user.solanaAddress,
-  slug: 'stable-genius',
+  product: 'stable-genius',
   amount: BigInt(done.netOut!),
 });
 opened.status; // 'COMPLETED' | 'PARTIALLY_COMPLETED' | 'FAILED'
 
 // 6. Later: close — sells the full holding back to USDC. Cesto signs.
-await cesto.managed.closeAndWait({ user: user.solanaAddress, slug: 'stable-genius' });
+await cesto.close.startAndWait({ user: user.solanaAddress, product: 'stable-genius' });
 
 // 7. Withdraw: bridge back to the user's EVM wallet.
 //    Managed source wallet → Cesto signs and lands the burn itself.

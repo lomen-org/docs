@@ -21,9 +21,9 @@ the user's key.
 
     const cesto = new Cesto({ apiKey: process.env.CESTO_API_KEY }); // write-scoped key, server-side only
 
-    const result = await cesto.managed.openAndWait({
+    const result = await cesto.open.startAndWait({
       user: user.solanaAddress, // or the externalUserId / EVM wallet you provisioned with
-      slug: 'stable-genius',
+      product: 'stable-genius',
       amount: 100_000_000n, // bigint, input-token base units (100 USDC @ 6 decimals)
     });
     result.status;       // 'COMPLETED' | 'PARTIALLY_COMPLETED' | 'FAILED'
@@ -86,8 +86,8 @@ the user's key.
     const wallet = keypair.publicKey.toBase58();
 
     const result = await cesto.open.execute({
-      user: wallet,
-      slug: 'stable-genius',
+      wallet,
+      product: 'stable-genius',
       amount: 100_000_000n, // input base units (e.g. 100 USDC @ 6 decimals)
       signTransactions: signWithKeypair(keypair), // signs each prepared leg locally
     });
@@ -115,8 +115,8 @@ the user's key.
 
         ```ts
         const prepared = await cesto.open.prepare({
-          user: userWalletAddress,
-          slug: 'stable-genius',
+          wallet: userWalletAddress,
+          product: 'stable-genius',
           amount: 100_000_000n,
         });
         // { executionId, transactions: [{ nodeId, transaction }], expiresAt }
@@ -159,12 +159,12 @@ the user's key.
 
     ### `open.prepare(params)`
 
-    <ParamField path="user" type="string" required>
+    <ParamField path="wallet" type="string" required>
       Solana address of the wallet opening the position — it signs and pays for every
       transaction.
     </ParamField>
-    <ParamField path="slug" type="string" required>
-      Basket to open, by slug (a product id also works).
+    <ParamField path="product" type="string" required>
+      Basket to open — product id or slug.
     </ParamField>
     <ParamField path="amount" type="bigint" required>
       Amount to invest, in input-token base units. Serialized as a decimal string on the
@@ -195,6 +195,14 @@ the user's key.
     `waitForExecution` polls it until a terminal status and throws a `CestoError` on
     timeout (the execution keeps running server-side). These are shared with the managed
     flow — managed executions poll through the same methods.
+
+    <Warning>
+      They are scoped to the **issuing API key**, which covers everything on this page and
+      the managed flow. The one exception is
+      [`start` with `consent`](#existing-cesto-users): those executions belong to the user
+      rather than your key, so a lookup returns `404` however long you poll — read
+      [`positions.getHoldings`](/sdk/positions#position-by-product-sdk-positions) instead.
+    </Warning>
 
     <ParamField path="pollIntervalMs" type="number" default="2500">
       Delay between status polls.
@@ -227,6 +235,100 @@ the user's key.
   with real USDC — test with small amounts first.
 </Warning>
 
+## Existing Cesto users
+
+There is a third case, between the two tabs above: the wallet already belongs to a **Cesto
+account holder**. Cesto can sign for them — but they own the key, so a write-scoped API key
+alone must never move their funds. Instead the user approves the action **once**, by
+signing a message, and Cesto opens the position with their Cesto wallet. No per-transaction
+signing, no round trip to the browser for each leg.
+
+It is the same [`open.start`](/sdk/managed-wallets#opening-closing-rebalancing) as the
+managed flow, with a `consent` field added — that field is the whole difference between the
+two. A managed user *cannot* produce a consent signature (Cesto holds the key); an account
+holder *must*.
+
+Check first — this path only works for wallets Cesto holds a key for:
+
+```ts
+const { exists, delegatedSigning } = await cesto.users.lookup({ wallet });
+// delegatedSigning: true → Cesto can sign for this user
+```
+
+An external wallet (Phantom, Solflare) that has never used Cesto returns `false`; those
+users take the BYOW flow above. See [Users](/sdk/users).
+
+<Steps>
+  <Step title="Create the approval challenge">
+    ```ts
+    const challenge = await cesto.open.createChallenge({
+      wallet: userWalletAddress,
+      product: 'stable-genius',
+      amount: 100_000_000n,
+    });
+    // { message, challengeToken, expectedPubkey, expiresAt, productId, … }
+    ```
+
+    The SDK derives the canonical params itself and resolves any slug to the exact product
+    id `start` will carry, so the approval always matches the action.
+  </Step>
+  <Step title="The user signs the message">
+    An Ed25519 signature over `challenge.message`, base58-encoded, from
+    `challenge.expectedPubkey`. It's a message — not a transaction — so there is nothing to
+    land on chain.
+
+    ```ts
+    const signature = await wallet.signMessage(challenge.message);
+    ```
+  </Step>
+  <Step title="Start the open">
+    ```ts
+    const { executionId, status } = await cesto.open.start({
+      user: userWalletAddress,
+      product: challenge.productId, // the resolved id — skips a second slug lookup
+      amount: 100_000_000n,
+      consent: { challengeToken: challenge.challengeToken, signature },
+    });
+    // status: 'QUEUED' | 'SCHEDULED_FOR_MARKET_OPEN'
+    ```
+  </Step>
+  <Step title="Track the result">
+    `start` resolves as soon as the job is **queued**, not when it has settled. Read the
+    position back to see the outcome:
+
+    ```ts
+    const holdings = await cesto.positions.getHoldings({
+      wallet: userWalletAddress,
+      product: challenge.productId,
+    });
+    // holdings.hasPosition flips true once the open completes
+    ```
+  </Step>
+</Steps>
+
+**What the user approves** is bound to the action *and its parameters* — this wallet, this
+basket, this amount. The signature cannot be replayed against a different amount or basket.
+The challenge is short-lived and single-use, so create it when the user is ready to approve
+rather than ahead of time.
+
+<Warning>
+  **`positions.getExecution` / `waitForExecution` cannot see these executions.** They are
+  recorded against the user rather than the API key that started them, and those methods are
+  scoped to the issuing key — so polling one returns `404` indefinitely rather than ever
+  reaching a terminal status. Use `getHoldings` as above. For the same reason
+  `open.startAndWait` rejects when `consent` is present, instead of polling forever.
+
+  This applies only to the approval flow. The managed and client-signed flows poll normally.
+</Warning>
+
+<Warning>
+  **`start` is never retried automatically**, whatever `maxRetries` says. The approval is
+  single-use, so a request that landed server-side but whose response was lost would be
+  rejected on retry as a replayed nonce — reporting failure for an open that is actually
+  running. On an ambiguous failure, read `positions.getHoldings` to see whether the open
+  landed, rather than re-sending.
+</Warning>
+
 ## Execution results
 
 Terminal statuses are `COMPLETED`, `PARTIALLY_COMPLETED`, and `FAILED` — identical in both
@@ -241,8 +343,8 @@ models.
 </Warning>
 
 To read the resulting position, use
-[`positions.getPosition`](/sdk/positions#position-by-product-sdk-positions) — SDK positions
-are self-custody and do **not** appear in `positions.getPositions`.
+[`positions.getHoldings`](/sdk/positions#position-by-product-sdk-positions) — SDK positions
+are self-custody and do **not** appear in `positions.list`.
 
 ## Common errors
 

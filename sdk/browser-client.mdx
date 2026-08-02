@@ -1,0 +1,156 @@
+---
+title: "Browser Client"
+icon: "globe"
+description: "Read baskets and fees directly from the browser — no API key."
+---
+
+<Note>
+  Requires `@cesto/sdk` **1.1.0 or later**.
+</Note>
+
+`@cesto/sdk` ships two entry points. The package root is the server client documented
+everywhere else — it authenticates with a secret `cesto_sk_…` key and refuses to run in a
+browser. The `/client` subpath is its read-only twin, built for the place a secret key can
+never go:
+
+| Import | Auth | Runs in | Surface |
+|---|---|---|---|
+| `@cesto/sdk` | secret key (`cesto_sk_…`) | server only | everything: products, positions, fees, users, open / close / rebalance |
+| `@cesto/sdk/client` | **none** | browser | public reads: products, fees |
+
+```ts
+import { CestoClient } from '@cesto/sdk/client';
+
+const cesto = new CestoClient();
+
+const products = await cesto.products.list({ includeBacktest: true });
+const basket = await cesto.products.get({ slug: 'stable-genius' });
+const chart = await cesto.products.getChart({ product: basket.id, timeRange: '3m' });
+const fees = await cesto.fees.get({ product: basket.id, inputAmountMicroUsdc: 100_000_000 });
+```
+
+No key, no configuration, no proxy route in your backend. Every endpoint it reaches is
+public and CORS-open, so the call goes straight from your page to the Cesto API.
+
+## What it can do
+
+<CardGroup cols={2}>
+  <Card title="Products" icon="basket-shopping">
+    `list`, `get`, `analytics`, `getChart` — identical params and responses to the server client.
+  </Card>
+  <Card title="Fees" icon="receipt">
+    `fees.get` — the deposit breakdown for a basket, so you can price an investment before the user connects a wallet.
+  </Card>
+</CardGroup>
+
+See [Products](/sdk/products) for the full method reference; the browser client's
+`products` resource is the same class, so every option documented there applies.
+
+`fees.get` always returns the anonymous breakdown: `open` populated, `close` and
+`rebalance` `null`, user-specific balances zero. That's a property of the endpoint, not of
+the missing key — the server client sees exactly the same shape.
+
+## Geo works out of the box
+
+Basket listings and `geoStatus.canInvest` depend on where the **reader** is, and the API
+derives that from the request IP.
+
+Called from the browser, that IP is your visitor's own — so the answer is right with
+nothing to configure. This is the one thing the browser client does *better* than a
+server-side proxy: a backend calling on a user's behalf sends its own datacenter IP, and
+has to forward the visitor's location explicitly to get the same result.
+
+## What it deliberately cannot do
+
+Opening, closing, and rebalancing are absent from this entry point — not omitted for
+later, but excluded by design. Those routes need a write-scoped `cesto_sk_…` key, and
+shipping one to a browser hands every visitor the ability to move funds for any of your
+users.
+
+<Warning>
+  Never import the package root (`@cesto/sdk`) into client-side code. It throws if it
+  detects a browser, but the real protection is not bundling a secret key in the first
+  place.
+</Warning>
+
+### Writing from a browser wallet
+
+The supported shape keeps the key on your server and the wallet in the browser:
+
+<Steps>
+  <Step title="Prepare on your server">
+    Your backend calls `cesto.open.prepare(…)` with the secret key and returns the unsigned
+    transactions to the page.
+  </Step>
+  <Step title="Sign in the browser">
+    The user signs them with their wallet (Phantom, Solflare, …). The private key never
+    leaves the wallet.
+  </Step>
+  <Step title="Submit from your server">
+    Your backend calls `cesto.positions.submit({ executionId, transactions })`.
+  </Step>
+</Steps>
+
+See [Open a Position](/sdk/open-position) for the full flow.
+
+## Configuration
+
+The transport half of the server client's options, minus the key:
+
+```ts
+new CestoClient({
+  baseURL: 'https://backend.cesto.co', // default; override for local development
+  timeout: 60_000,                     // per-request timeout in ms — default 60s
+  maxRetries: 2,                       // retries on transient errors — default 2
+  fetch: customFetch,                  // optional custom fetch implementation
+});
+```
+
+<ParamField path="baseURL" type="string" default="https://backend.cesto.co">
+  API base URL. In a bundled app, pass this explicitly — a build-time environment variable
+  is not visible to the SDK, so an omitted `baseURL` silently targets production.
+</ParamField>
+<ParamField path="timeout" type="number" default="60000">
+  Per-request timeout in milliseconds.
+</ParamField>
+<ParamField path="maxRetries" type="number" default="2">
+  Max automatic retries on transient failures (408, 429, 5xx, network errors, timeouts).
+</ParamField>
+<ParamField path="fetch" type="typeof fetch">
+  Custom fetch implementation. Defaults to the global `fetch`.
+</ParamField>
+
+<Tip>
+  Pointing a local page at a local API? Pass `baseURL` explicitly. Frameworks like Next.js
+  only inline environment variables they can see statically, so the SDK's own
+  `CESTO_BASE_URL` lookup does not survive bundling — and the failure is quiet: your reads
+  succeed, against production.
+</Tip>
+
+## Errors
+
+The same typed hierarchy as the server client, hung off `CestoClient` for `instanceof`
+checks:
+
+```ts
+try {
+  await cesto.products.get({ slug: 'nope' });
+} catch (err) {
+  if (err instanceof CestoClient.NotFoundError) {
+    // 404 — no such basket
+  } else if (err instanceof CestoClient.RateLimitError) {
+    // 429 — err.retryAfter is in ms
+  } else if (err instanceof CestoClient.APIConnectionError) {
+    // network failure — or a CORS rejection, which fetch reports the same way
+  }
+}
+```
+
+See [Errors](/sdk/errors) for the full hierarchy.
+
+## Rate limits
+
+Anonymous reads are limited per IP — your visitor's, not your server's — so one user's
+browsing cannot exhaust another's budget. The limits are generous enough for normal
+browsing (hundreds of requests per minute); a `429` arrives as a `RateLimitError` carrying
+`retryAfter`.

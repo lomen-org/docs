@@ -37,7 +37,7 @@ products[0].backtest; // performance metrics, or null
 Fetch a single basket by its slug.
 
 ```ts
-const product = await cesto.products.get('my-basket-slug');
+const product = await cesto.products.get({ slug: 'my-basket-slug' });
 product.id;          // product id
 product.versionId;   // current version id
 product.definition;  // the basket's workflow definition
@@ -46,7 +46,7 @@ product.definition;  // the basket's workflow definition
 ### Include the backtested chart
 
 ```ts
-const detailed = await cesto.products.get('my-basket-slug', {
+const detailed = await cesto.products.get({ slug: 'my-basket-slug' }, {
   includeBacktestChart: true,
   chartTimeRange: '1y', // '7d' | '1m' | '3m' | '6m' | '1y' | 'all', default '1y'
 });

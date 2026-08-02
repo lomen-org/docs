@@ -32,9 +32,9 @@ constructor throws without it.
 Keys are **read** (default) or **write**-scoped:
 
 - **Read** covers products, user lookups, and position reads (`products.*`, `users.get`,
-  `positions.getPositions`, `positions.getPosition`).
+  `positions.list`, `positions.getHoldings`).
 - **Write** is required for [provisioning and managed executions](/sdk/managed-wallets)
-  (`users.create`, `managed.*`) and for client-signed
+  (`users.create`, `*.start`) and for client-signed
   [opening](/sdk/open-position) and [closing](/sdk/close-position) positions
   (`open.*`, `close.*`, `positions.submit`, execution polling). A read-only key gets a
   `403 PermissionDeniedError` on write routes.
