@@ -46,7 +46,8 @@ product.definition;  // the basket's workflow definition
 ### Include the backtested chart
 
 ```ts
-const detailed = await cesto.products.get({ slug: 'my-basket-slug' }, {
+const detailed = await cesto.products.get({
+  slug: 'my-basket-slug',
   includeBacktestChart: true,
   chartTimeRange: '1y', // '7d' | '1m' | '3m' | '6m' | '1y' | 'all', default '1y'
 });

@@ -8,7 +8,7 @@ description: "Client options and per-request overrides."
 
 ```ts
 new Cesto({
-  apiKey: 'cesto_sk_…',       // required (or CESTO_API_KEY env)
+  apiKey: 'cesto_sk_…',       // required — the constructor throws without it
   timeout: 60_000,            // per-request timeout in ms — default 60s
   maxRetries: 2,              // automatic retries on transient errors — default 2
   fetch: customFetch,         // optional custom fetch implementation
@@ -16,13 +16,14 @@ new Cesto({
 ```
 
 <ParamField path="apiKey" type="string">
-  Secret API key. Falls back to `process.env.CESTO_API_KEY`. Required.
+  Secret API key. Required — the constructor throws if omitted; the SDK does not read
+  environment variables.
 </ParamField>
 <ParamField path="timeout" type="number" default="60000">
   Per-request timeout in milliseconds.
 </ParamField>
 <ParamField path="maxRetries" type="number" default="2">
-  Max automatic retries on transient failures (408, 409, 429, 5xx, network errors, timeouts).
+  Max automatic retries on transient failures (408, 429, 5xx, network errors, timeouts).
 </ParamField>
 <ParamField path="fetch" type="typeof fetch">
   Custom fetch implementation (e.g. `undici`). Defaults to the global `fetch`.

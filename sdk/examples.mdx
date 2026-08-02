@@ -14,35 +14,44 @@ cd cesto-sdk-examples
 pnpm install
 cp .env.example .env   # add your CESTO_API_KEY (and wallet vars for the write examples)
 
-pnpm products
+pnpm byow:products
 ```
 
 Requires **Node.js 20.6+**.
 
-<Note>
-  The examples repo covers the client-signed (BYOW) flows. For the **managed wallets** flow
-  (`users.create` + `*.start`, no signing on your side), follow
-  [Managed Wallets](/sdk/managed-wallets) — or adapt the `pnpm open` example by swapping
-  `open.execute` + `signTransactions` for `open.startAndWait` on a provisioned wallet.
-</Note>
+The repo covers **both** integration tracks:
+
+- **BYOW** (`byow:*`) — client-signed flows: your own Solana wallet signs every write
+  (open / close / split-flow / bridges).
+- **Managed** (`managed:*`) — the managed-wallets flow: `users.create` + `*.start`, with
+  Cesto signing server-side — no key handling on your side. See
+  [Managed Wallets](/sdk/managed-wallets).
 
 ## What's included
 
 | Example | Run | Docs |
 | --- | --- | --- |
-| List products (+ backtests) | `pnpm products` | [Products](/sdk/products) |
-| Product detail + chart | `pnpm product` | [Products](/sdk/products) |
-| Positions by wallet | `pnpm positions` | [Positions](/sdk/positions) |
-| Live position in one basket | `pnpm position` | [Positions](/sdk/positions) |
-| Open a position (one call) | `pnpm open --yes` | [Open a Position](/sdk/open-position) |
-| Close a position (one call) | `pnpm close --yes` | [Close a Position](/sdk/close-position) |
-| Rebalance a position | `pnpm rebalance --yes` | [Rebalance a Position](/sdk/rebalance-position) |
-| Explicit prepare → sign → submit → poll | `pnpm split-flow --yes` | [Open a Position](/sdk/open-position#split-flow-browser-wallet-signs) |
-| Typed errors, overrides, cancellation | `pnpm errors` | [Errors & Retries](/sdk/errors) |
+| BYOW: List products (+ backtests) | `pnpm byow:products` | [Products](/sdk/products) |
+| BYOW: Product detail + chart | `pnpm byow:product` | [Products](/sdk/products) |
+| BYOW: Positions by wallet | `pnpm byow:positions` | [Positions](/sdk/positions) |
+| BYOW: Live position in one basket | `pnpm byow:position` | [Positions](/sdk/positions) |
+| BYOW: Open a position (one call) | `pnpm byow:open --yes` | [Open a Position](/sdk/open-position) |
+| BYOW: Close a position (one call) | `pnpm byow:close --yes` | [Close a Position](/sdk/close-position) |
+| BYOW: Explicit prepare → sign → submit → poll | `pnpm byow:split-flow --yes` | [Open a Position](/sdk/open-position#split-flow-browser-wallet-signs) |
+| BYOW: Typed errors, overrides, cancellation | `pnpm byow:errors` | [Errors & Retries](/sdk/errors) |
+| BYOW: Bridge USDC Base → Solana | `pnpm byow:bridge:base-to-solana --yes` | [Bridging (CCTP)](/sdk/bridging) |
+| BYOW: Bridge USDC Solana → Base (withdrawal) | `pnpm byow:bridge:solana-to-base --yes` | [Bridging (CCTP)](/sdk/bridging) |
+| Managed: Provision a user + wallet | `pnpm managed:user` | [Managed Wallets](/sdk/managed-wallets) |
+| Managed: Fund the wallet from Base | `pnpm managed:fund --yes` | [Managed Wallets](/sdk/managed-wallets) |
+| Managed: Open a position | `pnpm managed:open --yes` | [Managed Wallets](/sdk/managed-wallets) |
+| Managed: Exercise every GET endpoint | `pnpm managed:gets` | [Positions](/sdk/positions) |
+| Managed: Close a position | `pnpm managed:close --yes` | [Close a Position](/sdk/close-position) |
+| Managed: Check wallet balances | `pnpm managed:balances` | [Managed Wallets](/sdk/managed-wallets) |
 
 <Warning>
-  The open / close / rebalance / split-flow examples execute **real swaps on Solana mainnet**,
-  spending real USDC from the wallet you configure (Cesto sponsors the gas). They refuse to
-  run without an explicit `--yes` flag — use a dedicated test wallet with small amounts, and
-  a **write-scoped** API key (see [Authentication](/sdk/authentication)).
+  The open / close / split-flow / bridge and managed write examples move **real USDC on
+  mainnet** (Solana and Base), spending from the wallets you configure (Cesto sponsors
+  open/close gas). Write examples refuse to run without an explicit `--yes` flag — use
+  dedicated test wallets with small amounts, and a **write-scoped** API key (see
+  [Authentication](/sdk/authentication)).
 </Warning>

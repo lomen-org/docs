@@ -49,14 +49,16 @@ when reporting an issue.
 
 ## Automatic retries
 
-Transient failures (408, 409, 429, 5xx, connection errors, and timeouts) are retried automatically with
+Transient failures (408, 429, 5xx, connection errors, and timeouts) are retried automatically with
 exponential backoff and jitter, honoring the `Retry-After` header. Tune with `maxRetries`
 (default `2`), or disable per request with `{ maxRetries: 0 }`.
 
 <Note>
-  One exception: [`positions.submit`](/sdk/open-position#method-reference) is **never
-  retried automatically** — a submit that timed out client-side may still have been
-  accepted, so poll `getExecution` instead of re-sending.
+  A handful of non-idempotent methods are **never retried automatically**, regardless of
+  `maxRetries`: [`positions.submit`](/sdk/open-position#method-reference) (a submit that
+  timed out client-side may still have been accepted — poll `getExecution` instead of
+  re-sending), the consent-path `open.start` / `close.start` / `rebalance.start`, and
+  `bridge.submitBurn` / `bridge.initiate`.
 </Note>
 
 ## Timeouts & cancellation

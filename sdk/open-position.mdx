@@ -355,14 +355,16 @@ are self-custody and do **not** appear in `positions.list`.
 | BYOW: submitted tx bytes altered vs prepared | `400` — only signatures may be added |
 | BYOW: signed by a different wallet than prepared for | `400` — the wallet's signature must verify |
 | Managed: `user` isn't one of your key's provisioned users | `404`, code `MANAGED_USER_NOT_FOUND` |
-| Another execution in flight for this wallet + product | conflict at prepare/submit |
+| Open while a close is in flight for this wallet + product | `403 PermissionDeniedError`, code `FORBIDDEN_OPERATION` |
 | Wallet has insufficient input-token (USDC) balance | leg fails at landing → `FAILED` / `PARTIALLY_COMPLETED` |
 | `submit` timed out client-side | do **not** re-send; poll `getExecution` |
 
 ## Constraints
 
 - **Swap-only baskets** (one or more tokens). No prediction markets, lending, or perps.
-- **One in-flight execution** per wallet + product.
+- **Open during close is gated** — opening while a close is in flight for the same
+  wallet + product is rejected with `403`, code `FORBIDDEN_OPERATION`. Concurrent opens
+  are otherwise not limited.
 - **Gas sponsored** — Cesto pays network gas + ATA rent; the wallet needs only the input
   token (USDC), no SOL (unless the deployment runs without a sponsor).
 

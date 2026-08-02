@@ -5,7 +5,7 @@ description: "Read baskets and fees directly from the browser — no API key."
 ---
 
 <Note>
-  Requires `@cesto/sdk` **1.1.0 or later**.
+  Requires `@cesto/sdk` **0.4.2 or later**.
 </Note>
 
 `@cesto/sdk` ships two entry points. The package root is the server client documented
@@ -95,21 +95,17 @@ See [Open a Position](/sdk/open-position) for the full flow.
 
 ## Configuration
 
-The transport half of the server client's options, minus the key:
+The transport half of the server client's options, minus the key and the URL — the SDK
+always targets the production API:
 
 ```ts
 new CestoClient({
-  baseURL: 'https://backend.cesto.co', // default; override for local development
   timeout: 60_000,                     // per-request timeout in ms — default 60s
   maxRetries: 2,                       // retries on transient errors — default 2
   fetch: customFetch,                  // optional custom fetch implementation
 });
 ```
 
-<ParamField path="baseURL" type="string" default="https://backend.cesto.co">
-  API base URL. In a bundled app, pass this explicitly — a build-time environment variable
-  is not visible to the SDK, so an omitted `baseURL` silently targets production.
-</ParamField>
 <ParamField path="timeout" type="number" default="60000">
   Per-request timeout in milliseconds.
 </ParamField>
@@ -120,12 +116,8 @@ new CestoClient({
   Custom fetch implementation. Defaults to the global `fetch`.
 </ParamField>
 
-<Tip>
-  Pointing a local page at a local API? Pass `baseURL` explicitly. Frameworks like Next.js
-  only inline environment variables they can see statically, so the SDK's own
-  `CESTO_BASE_URL` lookup does not survive bundling — and the failure is quiet: your reads
-  succeed, against production.
-</Tip>
+There is no `baseURL` option — every request goes to the production API. For local
+development against a local API, set the `CESTO_BASE_URL` environment variable instead.
 
 ## Errors
 
