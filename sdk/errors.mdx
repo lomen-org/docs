@@ -14,7 +14,7 @@ subclasses; transport problems become connection errors. All classes are exposed
 import { Cesto } from '@cesto/sdk';
 
 try {
-  await cesto.products.get('missing-slug');
+  await cesto.products.get({ slug: 'missing-slug' });
 } catch (err) {
   if (err instanceof Cesto.NotFoundError) {
     // 404

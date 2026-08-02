@@ -21,9 +21,9 @@ in the managed model Cesto signs server-side.
 
     const cesto = new Cesto({ apiKey: process.env.CESTO_API_KEY }); // write-scoped key, server-side only
 
-    const result = await cesto.managed.rebalanceAndWait({
+    const result = await cesto.rebalance.startAndWait({
       user: user.solanaAddress, // or the externalUserId / EVM wallet you provisioned with
-      slug: 'stable-genius',
+      product: 'stable-genius',
     });
     result.status;       // 'COMPLETED' | 'PARTIALLY_COMPLETED' | 'FAILED'
     result.transactions; // per-leg { nodeId, ok, signature?, error? }
@@ -73,8 +73,8 @@ in the managed model Cesto signs server-side.
       <Step title="Backend: prepare">
         ```ts
         const prepared = await cesto.rebalance.prepare({
-          user: userWalletAddress,
-          slug: 'stable-genius',
+          wallet: userWalletAddress,
+          product: 'stable-genius',
         });
         // { done, executionId, transactions: [{ nodeId, transaction }], expiresAt }
 
@@ -130,7 +130,7 @@ in the managed model Cesto signs server-side.
     ```ts
     import { signWithKeypair } from '@cesto/sdk';
 
-    const prepared = await cesto.rebalance.prepare({ user: wallet, slug: 'stable-genius' });
+    const prepared = await cesto.rebalance.prepare({ wallet, product: 'stable-genius' });
     if (prepared.done) return; // already on the latest version
 
     const signed = await signWithKeypair(keypair)(prepared.transactions);
@@ -145,11 +145,11 @@ in the managed model Cesto signs server-side.
 
     ### `rebalance.prepare(params)`
 
-    <ParamField path="user" type="string" required>
+    <ParamField path="wallet" type="string" required>
       Solana address of the wallet rebalancing — it signs and pays for every transaction.
     </ParamField>
-    <ParamField path="slug" type="string" required>
-      Basket to rebalance, by slug (a product id also works).
+    <ParamField path="product" type="string" required>
+      Basket to rebalance — product id or slug.
     </ParamField>
 
     Returns `{ done, executionId, transactions, expiresAt }`. When `done` is `true` the
@@ -184,6 +184,47 @@ in the managed model Cesto signs server-side.
   Solana mainnet — test with small amounts first.
 </Warning>
 
+## Existing Cesto users
+
+When the wallet belongs to a **Cesto account holder**, the user approves once by signing a
+message and Cesto runs the rebalance with their Cesto wallet — no per-transaction signing.
+Same `rebalance.start` as the managed flow, plus a `consent` field:
+
+```ts
+const challenge = await cesto.rebalance.createChallenge({
+  wallet: userWalletAddress,
+  product: 'stable-genius',
+});
+
+const signature = await wallet.signMessage(challenge.message); // base58
+
+const { executionId } = await cesto.rebalance.start({
+  user: userWalletAddress,
+  product: challenge.productId,
+  consent: { challengeToken: challenge.challengeToken, signature },
+});
+```
+
+<Note>
+  **What the user approves here is different in one way that matters.** The message says
+  *"migrate my position in this basket to whatever its latest version is."* The target
+  version is deliberately **not** part of the approval, because the backend resolves it when
+  the job is enqueued. A user approving a rebalance is approving the move, not a specific
+  destination version.
+</Note>
+
+<Warning>
+  As on the open path, `positions.getExecution` / `waitForExecution` cannot see executions
+  started with `consent` — they are scoped to the issuing API key, and these are recorded
+  against the user. Track the outcome with
+  [`getHoldings`](/sdk/positions#position-by-product-sdk-positions) instead.
+</Warning>
+
+Like the [open version](/sdk/open-position#existing-cesto-users), it resolves as soon as the
+job is **queued** and is **never retried automatically**. Unlike `prepare`, it is **not**
+limited to swap-only baskets — this path runs the same machinery as the Cesto app, so
+prediction and perps baskets rebalance here too.
+
 ## Previewing a rebalance
 
 `rebalance.getAvailability` is a **read** (works with a read-only key, and accepts any
@@ -192,8 +233,8 @@ they commit — the target version, the token diffs, and whether they're eligibl
 
 ```ts
 const availability = await cesto.rebalance.getAvailability({
-  user: userWalletAddress,
-  slug: 'stable-genius',
+  wallet: userWalletAddress,
+  product: 'stable-genius',
 });
 
 if (availability.available && availability.eligible) {
@@ -209,11 +250,11 @@ minimum).
 
 ### `rebalance.getAvailability(params)`
 
-<ParamField path="user" type="string" required>
+<ParamField path="wallet" type="string" required>
   Solana address of the wallet whose position would be rebalanced.
 </ParamField>
-<ParamField path="slug" type="string" required>
-  Basket to rebalance, by slug (a product id also works).
+<ParamField path="product" type="string" required>
+  Basket to rebalance — product id or slug.
 </ParamField>
 
 Returns the availability preview: `{ available, reason?, currentVersionId?, targetVersionId?,
@@ -227,8 +268,8 @@ the swaps, fees, and on-chain signatures.
 
 ```ts
 const { history } = await cesto.rebalance.getHistory({
-  user: userWalletAddress,
-  slug: 'stable-genius',
+  wallet: userWalletAddress,
+  product: 'stable-genius',
 });
 // history[0] → { fromVersion, toVersion, status, swapDetails, tokensSold, tokensBought,
 //                signatures, totalFees, startedAt, completedAt, ... }
@@ -246,14 +287,14 @@ Terminal statuses are `COMPLETED`, `PARTIALLY_COMPLETED`, and `FAILED` — exact
   **Partial completion is real.** A rebalance is several independent swaps with no atomicity
   across them. If a swap leg fails, the execution ends `PARTIALLY_COMPLETED` and
   `result.transactions` shows which legs landed (with signatures) and which failed. To finish
-  the migration, simply rebalance again (`managed.rebalance` / `rebalance.prepare`) — it
+  the migration, simply rebalance again (`rebalance.start` / `rebalance.prepare`) — it
   re-reads the wallet's current on-chain balances and targets only the tokens that still
   need migrating. There are no rounds to resume.
 </Warning>
 
 To read the resulting position, use
-[`positions.getPosition`](/sdk/positions#position-by-product-sdk-positions) — SDK positions are
-self-custody and do **not** appear in `positions.getPositions`.
+[`positions.getHoldings`](/sdk/positions#position-by-product-sdk-positions) — SDK positions are
+self-custody and do **not** appear in `positions.list`.
 
 ## Constraints
 

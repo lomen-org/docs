@@ -1,0 +1,79 @@
+---
+title: "Users"
+icon: "user-check"
+description: "Check whether a wallet belongs to an existing Cesto user."
+---
+
+`cesto.users.lookup` resolves a Solana wallet to a Cesto user and tells you whether Cesto
+can sign for that user — the **existing Cesto user** path on
+[open](/sdk/open-position#existing-cesto-users),
+[close](/sdk/close-position#existing-cesto-users), and
+[rebalance](/sdk/rebalance-position#existing-cesto-users), where the user approves once by
+signing a message instead of signing every transaction.
+
+Call it before offering that flow, so you can fall back to the client-signed one for
+wallets Cesto can't sign for.
+
+```ts
+const user = await cesto.users.lookup({ wallet: 'SOLANA_ADDRESS' });
+
+user.exists;           // true when the wallet resolves to a Cesto user
+user.delegatedSigning; // true when Cesto can sign on their behalf
+user.migrationStatus;  // 'NOT_REQUIRED' | 'REQUIRED' | 'IN_PROGRESS' | 'COMPLETED' | null
+user.provider;         // 'EXTERNAL' | 'PRIVY' | 'PARA' | null
+```
+
+There's a convenience boolean when that's all you need:
+
+```ts
+if (await cesto.users.exists({ wallet })) { /* … */ }
+```
+
+<Note>
+  An unknown wallet is a **200 with `exists: false`**, not a 404 — branch on the response
+  rather than catching an error. `migrationStatus` and `provider` are `null` for unknown
+  wallets.
+</Note>
+
+Works with a read-only key.
+
+## Parameters
+
+<ParamField path="wallet" type="string" required>
+  Solana address (base58) to look up.
+</ParamField>
+
+## Response
+
+<ResponseField name="exists" type="boolean">
+  True when the wallet resolves to a Cesto user.
+</ResponseField>
+<ResponseField name="delegatedSigning" type="boolean">
+  True when Cesto can sign on the user's behalf — their Privy wallet has a signer attached,
+  or their older Para wallet still holds an encrypted key share. The field name is
+  historical; read it as "Cesto holds a key for this user".
+</ResponseField>
+<ResponseField name="migrationStatus" type="'NOT_REQUIRED' | 'REQUIRED' | 'IN_PROGRESS' | 'COMPLETED' | null">
+  Para → Privy migration gate state. `null` when the wallet is unknown.
+</ResponseField>
+<ResponseField name="provider" type="'EXTERNAL' | 'PRIVY' | 'PARA' | null">
+  How the user signed up. `null` when the wallet is unknown.
+</ResponseField>
+
+## Choosing a flow
+
+```ts
+const { exists, delegatedSigning } = await cesto.users.lookup({ wallet });
+
+if (exists && delegatedSigning) {
+  // Existing Cesto user: createChallenge → user signs the message → start
+} else {
+  // The wallet signs its own transactions: prepare → sign → submit
+}
+```
+
+<Warning>
+  `delegatedSigning: false` for an existing user is not a bug — an external wallet
+  (`provider: 'EXTERNAL'`) is one Cesto never held a key for. Those users always sign their
+  own transactions.
+</Warning>

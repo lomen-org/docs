@@ -180,9 +180,9 @@ burn amount — `fast` mode deducts its fee at mint):
     ```ts
     const done = await cesto.bridge.waitForTransfer(transferId);
 
-    const result = await cesto.managed.openAndWait({
+    const result = await cesto.open.startAndWait({
       user: user.solanaAddress, // the managed wallet that received the funds
-      slug: 'stable-genius',
+      product: 'stable-genius',
       amount: BigInt(done.netOut!),
     });
     ```
@@ -195,8 +195,8 @@ burn amount — `fast` mode deducts its fee at mint):
     const done = await cesto.bridge.waitForTransfer(transferId);
 
     const result = await cesto.open.execute({
-      user: userSolanaWallet,
-      slug: 'stable-genius',
+      wallet: userSolanaWallet,
+      product: 'stable-genius',
       amount: BigInt(done.netOut!), // not the burn amount — fast mode deducts its fee
       signTransactions: signWithKeypair(keypair), // keypair loaded server-side from process.env
     });

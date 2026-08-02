@@ -71,24 +71,24 @@ const cesto = new Cesto({ apiKey: process.env.CESTO_API_KEY });
 const products = await cesto.products.list();
 
 // Fetch one basket by slug
-const product = await cesto.products.get('my-basket-slug');
+const product = await cesto.products.get({ slug: 'my-basket-slug' });
 
 // Look up positions by external Solana wallet
-const { positions } = await cesto.positions.getPositions({
-  user: 'EXTERNAL_SOLANA_ADDRESS',
+const { positions } = await cesto.positions.list({
+  wallet: 'EXTERNAL_SOLANA_ADDRESS',
 });
 
 // Live position in one basket (the position view for SDK-opened positions)
-const position = await cesto.positions.getPosition({
-  user: 'EXTERNAL_SOLANA_ADDRESS',
-  slug: 'stable-genius',
+const position = await cesto.positions.getHoldings({
+  wallet: 'EXTERNAL_SOLANA_ADDRESS',
+  product: 'stable-genius',
 });
 
 // Managed wallets (write-scoped key): provision a user, then invest — Cesto signs
 const user = await cesto.users.create({ evmWalletAddress: '0xUserEvmWallet' });
-const { executionId } = await cesto.managed.open({
+const { executionId } = await cesto.open.start({
   user: user.solanaAddress,
-  slug: 'stable-genius',
+  product: 'stable-genius',
   amount: 10_000_000n, // 10 USDC @ 6 decimals
 });
 ```

@@ -1,0 +1,96 @@
+---
+title: "Fees"
+icon: "receipt"
+description: "Price a basket investment before the user commits."
+---
+
+`cesto.fees.get` returns the deposit breakdown for a basket: what actually gets invested,
+the SOL gas-reserve top-up, and the platform fee — plus slippage and gas estimates.
+
+Use it to show a user exactly what their deposit buys before they sign anything.
+
+```ts
+const fees = await cesto.fees.get({
+  product: 'stable-genius',        // id or slug
+  inputAmountMicroUsdc: 100_000_000, // 100 USDC @ 6 decimals
+});
+
+fees.open.breakdown.investment;  // deployed into the basket
+fees.open.breakdown.bufferTopUp; // SOL gas-reserve top-up, paid in USDC
+fees.open.breakdown.platformFee; // Cesto's fee, on top of the investment
+fees.open.totalRequired;         // the three summed — what the user must fund
+```
+
+<Note>
+  Public — no API key required, and available in the
+  [browser client](/sdk/browser-client). You can price a basket on a landing page before
+  the visitor has connected a wallet.
+</Note>
+
+## Units
+
+All USDC amounts are **micro-USDC integers** (1 USDC = 1,000,000). Percentages are plain
+percents (`0.25` means 0.25%), and rates in basis points are bps (`10` means 0.1%).
+
+## Parameters
+
+<ParamField path="product" type="string" required>
+  Basket to price — product id or slug.
+</ParamField>
+<ParamField path="inputAmountMicroUsdc" type="number | bigint">
+  Investment amount in micro-USDC. Must be a non-negative integer. Omit (or pass `0`) for an
+  amount-independent preview.
+</ParamField>
+<ParamField path="leverage" type="number">
+  Boosted-open multiplier. Integer ≥ 2; omit for the spot behaviour.
+</ParamField>
+
+## Response
+
+<ResponseField name="open" type="FundingInfo">
+  Funding requirements for an open: `breakdown`, `totalRequired`, `minRequiredInput`,
+  `estimatedSlippage`, `estimatedGasUsd`, and the Jupiter fee estimates.
+</ResponseField>
+<ResponseField name="close" type="FundingInfo | null">
+  Always `null` on this route — see below.
+</ResponseField>
+<ResponseField name="rebalance" type="FundingInfo | null">
+  Always `null` on this route — see below.
+</ResponseField>
+<ResponseField name="platformFee" type="PlatformFee | null">
+  The active platform-fee configuration, or `null` when none is set.
+</ResponseField>
+<ResponseField name="estimatedSlippage" type="number">
+  Estimated slippage for an open, as a percent.
+</ResponseField>
+<ResponseField name="jupiterPlatformFeeBps" type="number">
+  Effective Jupiter Ultra platform-fee rate across the product's swap legs, in bps.
+  Informational — Jupiter deducts it from swap output, it is never charged on top.
+</ResponseField>
+
+<Warning>
+  **This route always answers anonymously**, even with a key. `open` is populated, `close`
+  and `rebalance` are always `null`, and every user-specific field — embedded wallet
+  balances, `deficit`, `totalLockedUsdc` — is zero. That's a property of the endpoint, not
+  of the key you used: it computes what an investment *costs*, not what a particular user
+  can afford.
+</Warning>
+
+## Reading the breakdown
+
+The deposit splits three ways, and only the first reaches the basket:
+
+| Field | What it is |
+| --- | --- |
+| `breakdown.investment` | Deployed into the basket's tokens |
+| `breakdown.bufferTopUp` | SOL gas-reserve top-up, converted to USDC and paid by the user |
+| `breakdown.platformFee` | Cesto's fee, charged on top of the investment |
+| `totalRequired` | The three summed — fund at least this much |
+| `minRequiredInput` | The product's floor; below this the open is rejected |
+
+`refundableRentUsd` is part of the gas estimate but **recoverable** — it's rent-exempt
+reserve for token accounts, returned when those accounts close. Don't present it as a fee.
+
+If the input can't cover the operation even after the buffer, `open.rejection` is present
+with code `INPUT_BELOW_MIN_AFTER_BUFFER` — surface `minRequiredInput` to the user rather
+than letting the open fail later.
