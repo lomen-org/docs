@@ -1,11 +1,17 @@
 ---
 title: "Authentication"
 icon: "key"
-description: "API keys for the Cesto SDK."
+description: "Secret API keys for the Cesto Server SDK."
 ---
 
-The SDK authenticates with a **secret API key**. Keys look like `cesto_sk_…` and are sent
-automatically with every request — you never set headers yourself.
+The Server SDK authenticates with a **secret API key**. Keys look like `cesto_sk_…` and are
+sent automatically with every request — you never set headers yourself.
+
+<Note>
+  Looking for the browser key? The [Web SDK](/web-sdk/overview) uses a **publishable**
+  `cesto_pk_…` key instead, which is safe to ship in client code. Both are covered side by
+  side in [API keys](/developers/api-keys).
+</Note>
 
 ## Getting a key
 

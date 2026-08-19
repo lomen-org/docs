@@ -14,11 +14,19 @@ Works with Claude Code, Cursor, Codex, Windsurf, and 60+ other agents. Source: [
 
 ## Structure
 
+Two tabs: **Documentation** (the product) and **Developers** (everything you can build with).
+
 - `cesto/` — product documentation (baskets, Labs, funding, rebalancing, security, the skill)
-- `sdk/` — the `@cesto/sdk` TypeScript client reference
-- `widgets/` — embeddable basket widgets
+- `developers/` — the developer hub: surface comparison, integration decision, API keys
+- `widgets/` — embeddable basket widgets (iframe, no key)
+- `web-sdk/` — the Web SDK: `@cesto/web-sdk` + `@cesto/react`, the in-page invest flow (publishable `cesto_pk_` key)
+- `sdk/` — the Server SDK: the `@cesto/sdk` TypeScript client reference (secret `cesto_sk_` key)
 - `skill.md` — the agent skill served at the site root
 - `docs.json` — Mintlify navigation and site config
+
+The three developer surfaces are ordered by how much you build: Widgets → Web SDK → Server
+SDK. `developers/choose-an-integration.mdx` is the page that routes people between them —
+keep it accurate when any surface changes.
 
 ## Local development
 

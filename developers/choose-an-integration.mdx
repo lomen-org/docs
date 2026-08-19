@@ -1,0 +1,98 @@
+---
+title: "Choose your integration"
+icon: "signs-post"
+description: "Widgets, Web SDK, or Server SDK — a one-page decision, with the questions that actually separate them."
+---
+
+The three surfaces are not tiers of the same thing. They answer different questions about
+**who owns the user's account and the invest UI**, and that is what should decide it — not
+how much code you feel like writing.
+
+## Start with one question
+
+**Do your users invest as Cesto users, or as your users?**
+
+<CardGroup cols={2}>
+  <Card title="As Cesto users" icon="user">
+    They sign in to Cesto (email, Google, or a Solana wallet), and Cesto holds the wallet
+    and the position. Your product supplies the audience and the entry point.
+    → [Widgets](/widgets/overview) or the [Web SDK](/web-sdk/overview).
+  </Card>
+  <Card title="As your users" icon="users-gear">
+    They never see Cesto. Your product holds the accounts and the wallets — Cesto-managed
+    or your own — and you build the whole experience.
+    → [Server SDK](/sdk/overview).
+  </Card>
+</CardGroup>
+
+If the answer is "as Cesto users", the follow-up is just **where the invest happens**: on
+`app.cesto.co` in a new tab (Widgets), or in a dialog on your own page with events you can
+act on (Web SDK).
+
+## Decision table
+
+| If this is you | Use | Why |
+| --- | --- | --- |
+| A newsletter, blog post, or marketing page that should *show* a basket | [Widgets](/widgets/overview) | One iframe, no key, no JavaScript |
+| A landing page with an "Invest" CTA that must not send visitors away | [Web SDK](/web-sdk/overview) | In-page dialog, themed to your site, `onSuccess` fires on your page |
+| A React app that wants a themed CTA and invest state in your own UI | [Web SDK → React](/web-sdk/react) | `<CestoInvestButton>`, `useCestoInvest()` |
+| A CMS, Webflow, or no-code page where you can only add HTML | [Web SDK → Script tag](/web-sdk/script-tag) | One `<script>` plus `data-cesto-invest` attributes |
+| Your users already have accounts and you want them to never leave your app | [Server SDK](/sdk/overview) | You own the UI end to end |
+| Your users hold EVM (Base) funds and no Solana wallet | [Server SDK → Managed wallets](/sdk/managed-wallets) + [Bridging](/sdk/bridging) | Cesto provisions the Solana wallet and signs; CCTP moves the USDC |
+| Your users connect Phantom or Solflare themselves | [Server SDK → split flow](/sdk/open-position) | Self-custody: the browser wallet signs, Cesto never holds a key |
+| You only need to read basket data in the browser | [Server SDK → browser client](/sdk/browser-client) | `@cesto/sdk/client`, public reads, no key at all |
+
+## What each surface costs you
+
+<Tabs>
+  <Tab title="Widgets">
+    **You write:** an `<iframe>` tag.
+
+    **You get:** a live, themeable basket card — banner, chart, allocation, Invest CTA.
+
+    **You give up:** the invest itself happens on `app.cesto.co` in a new tab, and you get
+    no events back. Content and the invest destination are fixed; only styling is yours.
+
+    → [Overview](/widgets/overview) · [Usage](/widgets/usage) · [Playground](/widgets/playground)
+  </Tab>
+  <Tab title="Web SDK">
+    **You write:** a button, plus a publishable key. In React, a provider and a component.
+
+    **You get:** the whole invest flow — sign-in, funding, invest, close — in a dialog on
+    your page, themed with your tokens, with `onSuccess` / `onScheduled` / `onError` /
+    `onPositionClosed` callbacks you can wire to your own analytics and UI.
+
+    **You give up:** the flow's screens are Cesto's. You register the origins you embed
+    from, and the user still authenticates with Cesto inside the dialog.
+
+    → [Overview](/web-sdk/overview) · [Quickstart](/web-sdk/quickstart)
+  </Tab>
+  <Tab title="Server SDK">
+    **You write:** your product. Screens, state, error handling, and wallet plumbing (or
+    let Cesto manage the wallets).
+
+    **You get:** everything — products, positions, holdings, fees, managed wallets,
+    open / close / rebalance, and CCTP bridging, all typed.
+
+    **You give up:** nothing on the API side, but it is a real integration: a secret key
+    on a server you run, and an execution lifecycle to poll and surface.
+
+    → [Overview](/sdk/overview) · [Integration models](/sdk/integration-models)
+  </Tab>
+</Tabs>
+
+## Keys, in one line each
+
+- **Widgets** — no key. Any origin can embed them.
+- **Web SDK** — a publishable `cesto_pk_…`, safe in your client bundle, valid only on the
+  origins registered for it.
+- **Server SDK** — a secret `cesto_sk_…`, server-side only, read- or write-scoped.
+
+Details, and how to request each: [API keys](/developers/api-keys).
+
+## Still not sure?
+
+Pick the smallest surface that answers your question today. Moving from a widget to the
+Web SDK is a script tag; moving from the Web SDK to the Server SDK is a new integration
+but not a migration — positions opened either way are the same positions, readable through
+[`positions.list`](/sdk/positions).

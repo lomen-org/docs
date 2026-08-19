@@ -67,7 +67,7 @@ in the managed model Cesto signs server-side.
 
     In a web app the SDK runs on **your backend**, but the signatures come from the user's
     wallet in the **browser**. Prepare, hop to the browser to sign, then submit and poll —
-    identical in shape to the [open split flow](/sdk/open-position#split-flow-browser-wallet-signs):
+    identical in shape to the [open split flow](/sdk/open-position):
 
     <Steps>
       <Step title="Backend: prepare">
@@ -90,7 +90,7 @@ in the managed model Cesto signs server-side.
       </Step>
       <Step title="Browser: the user signs">
         Sign the transactions **as-is** — any modified byte is rejected at submit. Same
-        signing code as the [open flow](/sdk/open-position#split-flow-browser-wallet-signs).
+        signing code as the [open flow](/sdk/open-position).
 
         ```ts
         import { VersionedTransaction } from '@solana/web3.js';
@@ -124,7 +124,7 @@ in the managed model Cesto signs server-side.
 
     When your backend controls the signing keypair — bots, agents, services you custody —
     run the same four calls in one place, signing the prepared transactions with the
-    `signWithKeypair` helper (the same one [open](/sdk/open-position#one-call-flow-you-hold-the-keypair)
+    `signWithKeypair` helper (the same one [open](/sdk/open-position)
     uses). Load the keypair from a server-side environment variable — never hardcode it.
 
     ```ts
@@ -160,9 +160,9 @@ in the managed model Cesto signs server-side.
     ### Submit & status
 
     Submitting the signed transactions and polling for the result reuse the shared
-    [`positions.submit`](/sdk/open-position#method-reference),
-    [`positions.getExecution`](/sdk/open-position#method-reference), and
-    [`positions.waitForExecution`](/sdk/open-position#method-reference) methods — identical
+    [`positions.submit`](/sdk/open-position),
+    [`positions.getExecution`](/sdk/open-position), and
+    [`positions.waitForExecution`](/sdk/open-position) methods — identical
     to open and close.
 
     ## Common errors

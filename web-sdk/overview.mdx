@@ -1,0 +1,148 @@
+---
+title: "Web SDK"
+icon: "browser"
+description: "Turn any Invest CTA on your site into an in-place Cesto invest flow — sign-in, funding, and invest, without sending the visitor away."
+---
+
+The **Cesto Web SDK** puts the whole invest flow on your own page. Your button opens a
+themed Cesto dialog, the visitor signs in, funds, and invests inside it, and your page gets
+the outcome as a callback. Nothing navigates away.
+
+The loader itself is deliberately thin: it holds no tokens, makes no requests, and stores
+no state. Everything sensitive happens on the Cesto origin inside the dialog.
+
+<CardGroup cols={2}>
+  <Card title="Drop-in" icon="bolt">
+    A script tag and a `data-cesto-invest` attribute is a complete integration. No build
+    step required.
+  </Card>
+  <Card title="Themed to your site" icon="palette">
+    Eight color and shape tokens, applied to the dialog and to the bundled button, so the
+    two never disagree.
+  </Card>
+  <Card title="Events you can act on" icon="bell">
+    `onSuccess`, `onScheduled`, `onError`, `onPositionClosed`, and more — fired on your
+    page, ready for your analytics.
+  </Card>
+  <Card title="React-native (the other kind)" icon="react">
+    `<CestoProvider>`, a styled `<CestoInvestButton>`, and `useCestoInvest()`. Client-only,
+    Next.js App Router friendly.
+  </Card>
+</CardGroup>
+
+## The packages
+
+| Package | What it is |
+| --- | --- |
+| [`@cesto/web-sdk`](https://www.npmjs.com/package/@cesto/web-sdk) | Framework-agnostic browser loader. ESM, CJS, and an IIFE bundle for script tags. Zero runtime dependencies beyond the protocol package. |
+| [`@cesto/react`](https://www.npmjs.com/package/@cesto/react) | React bindings: provider, styled button, hook. Ships a `'use client'` banner. |
+| [`@cesto/web-protocol`](https://www.npmjs.com/package/@cesto/web-protocol) | The versioned `postMessage` types shared by the loader and the invest app. You rarely import this directly. |
+
+<Note>
+  Not to be confused with [`@cesto/sdk`](/sdk/overview), the **Server SDK**. That one runs
+  on your backend with a secret key and gives you the full API. This one runs in the
+  browser with a publishable key and gives you the invest flow. See
+  [Choose your integration](/developers/choose-an-integration).
+</Note>
+
+## What it looks like
+
+<CodeGroup>
+```html Script tag
+<script src="https://cdn.jsdelivr.net/npm/@cesto/web-sdk/dist/cesto-invest.iife.js" defer></script>
+
+<button data-cesto-invest="golden-age" data-cesto-pk="cesto_pk_your_key">
+  Invest now
+</button>
+```
+
+```tsx React
+import { CestoProvider, CestoInvestButton } from '@cesto/react';
+
+<CestoProvider apiKey="cesto_pk_your_key">
+  <CestoInvestButton basket="golden-age" amountUsd={100}>
+    Invest now
+  </CestoInvestButton>
+</CestoProvider>;
+```
+
+```ts JavaScript
+import { Cesto } from '@cesto/web-sdk';
+
+const cesto = new Cesto({ apiKey: 'cesto_pk_your_key' });
+
+button.addEventListener('click', () => {
+  cesto.invest({ basket: 'golden-age', onSuccess: (e) => track(e) });
+});
+```
+</CodeGroup>
+
+## How the flow runs
+
+<Steps>
+  <Step title="Your CTA is clicked">
+    The loader opens the invest surface — by default an in-page **dialog**: a
+    full-viewport transparent iframe onto `app.cesto.co/invest/<basket>`. A
+    [popup window](/web-sdk/modes) is available as an option and as an automatic fallback.
+  </Step>
+  <Step title="Cesto verifies your key">
+    The backend matches your publishable key against the page's origin and
+    [`onVerified`](/web-sdk/events) fires with `{ partner }`, switching on your branding
+    and attribution.
+  </Step>
+  <Step title="The user signs in, funds, and invests">
+    All inside the dialog, on the Cesto origin. Some sign-in methods cannot be framed and
+    move to a top-level window — the dialog stays on your page and waits. See
+    [Modes](/web-sdk/modes).
+  </Step>
+  <Step title="You get the outcome">
+    `onSuccess` with `{ basket, amountUsd, status }`, or `onScheduled` if the market is
+    closed, or `onError`. See [Events](/web-sdk/events).
+  </Step>
+</Steps>
+
+## Requirements
+
+- A **publishable key** (`cesto_pk_…`) and the origins you will embed from —
+  see [API keys](/developers/api-keys).
+- A basket **slug** (the last path segment of `app.cesto.co/product/<slug>`) or product
+  UUID.
+- A modern browser. React bindings need **React 18 or later**.
+
+<Warning>
+  Call `invest()` **synchronously** inside the click handler — no `await`, no timer before
+  it. Browsers block popups that are not tied to a user gesture, and even in dialog mode
+  the [popup fallback](/web-sdk/modes#automatic-popup-fallback) can kick in.
+</Warning>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/web-sdk/quickstart">
+    A working invest button in three flavours.
+  </Card>
+  <Card title="Script tag" icon="code" href="/web-sdk/script-tag">
+    The no-build path: data attributes and `bindInvestButtons`.
+  </Card>
+  <Card title="JavaScript API" icon="js" href="/web-sdk/javascript">
+    The `Cesto` class, `invest()`, and the session handle.
+  </Card>
+  <Card title="React" icon="react" href="/web-sdk/react">
+    Provider, button, and hook reference.
+  </Card>
+  <Card title="Modes" icon="window-restore" href="/web-sdk/modes">
+    Dialog vs popup, the fallback, and the login handoffs.
+  </Card>
+  <Card title="Theming" icon="palette" href="/web-sdk/theming">
+    Eight tokens, and how they reach the dialog.
+  </Card>
+  <Card title="Events" icon="bell" href="/web-sdk/events">
+    Every callback, when it fires, and how often.
+  </Card>
+  <Card title="Security" icon="shield-check" href="/web-sdk/security">
+    Why a public key is safe, and what the loader refuses to do.
+  </Card>
+  <Card title="Troubleshooting" icon="wrench" href="/web-sdk/troubleshooting">
+    Popup blockers, COOP, CSP, and local testing.
+  </Card>
+</CardGroup>

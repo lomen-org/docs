@@ -1,0 +1,167 @@
+---
+title: "Script tag"
+icon: "code"
+description: "The no-build path: one script, a data attribute per button, and an optional call to bindInvestButtons for anything added later."
+---
+
+For static sites, CMS pages, Webflow, newsletters-turned-landing-pages — anywhere you can
+drop HTML but not run a bundler. The IIFE bundle exposes `window.Cesto` and auto-binds
+every `[data-cesto-invest]` element on your page.
+
+```html
+<script src="https://cdn.jsdelivr.net/npm/@cesto/web-sdk/dist/cesto-invest.iife.js" defer></script>
+
+<button
+  data-cesto-invest="golden-age"
+  data-cesto-pk="cesto_pk_your_key"
+>
+  INVEST NOW
+</button>
+```
+
+The script binds on `DOMContentLoaded` (or immediately, if the DOM is already parsed), so
+`defer` is safe. Elements are bound **once** — the loader marks them with
+`data-cesto-bound="true"` — so a second bind pass never double-fires a button.
+
+<Tip>
+  The bundle is also served from unpkg:
+  `https://unpkg.com/@cesto/web-sdk/dist/cesto-invest.iife.js`. Pin a version in production
+  (`@cesto/web-sdk@0.1.0`) so a future release can't change the flow under you.
+</Tip>
+
+## Attributes
+
+| Attribute | Required | Meaning |
+| --- | --- | --- |
+| `data-cesto-invest` | **Yes** | Basket slug (or product UUID) to invest in |
+| `data-cesto-pk` | **Yes**¹ | Your publishable key (`cesto_pk_…`) |
+| `data-cesto-amount` | No | USD amount prefill. Non-numeric or non-positive values are ignored |
+| `data-cesto-mode` | No | `dialog` (default) or `popup` — see [Modes](/web-sdk/modes) |
+| `data-cesto-base-url` | No | Invest app origin override. Must be a `cesto.co` origin or `localhost` |
+| `data-cesto-accent` | No | Theme: CTA fill and highlights (`#rrggbb`) |
+| `data-cesto-background` | No | Theme: dialog and card surface |
+| `data-cesto-foreground` | No | Theme: primary text |
+| `data-cesto-muted` | No | Theme: inset / secondary surface |
+| `data-cesto-muted-foreground` | No | Theme: secondary text |
+| `data-cesto-border` | No | Theme: dividers and borders |
+| `data-cesto-radius` | No | Theme: corner radius, a CSS length like `12px` |
+| `data-cesto-scheme` | No | Theme: `dark`, `light`, or `auto` |
+
+¹ Required per element **unless** you supply a fallback key via
+[`bindInvestButtons({ apiKey })`](#binding-manually). The element's `data-cesto-pk` wins
+when both are present.
+
+A themed button, in full:
+
+```html
+<button
+  data-cesto-invest="golden-age"
+  data-cesto-pk="cesto_pk_your_key"
+  data-cesto-amount="100"
+  data-cesto-accent="#00CC55"
+  data-cesto-background="#091313"
+  data-cesto-radius="12px"
+  data-cesto-scheme="dark"
+>
+  INVEST NOW
+</button>
+```
+
+The theme attributes are serialized onto the invest URL as query params, so they apply in
+popup mode too — it is the same page. See [Theming](/web-sdk/theming) for what each token
+does and how values are validated.
+
+<Note>
+  A missing slug or key does not throw: the loader logs
+  `[Cesto] data-cesto-invest element is missing a basket slug or a publishable key` and the
+  click does nothing. Check the console first when a button seems dead.
+</Note>
+
+## Binding manually
+
+Call `bindInvestButtons()` yourself when elements arrive after page load (a CMS block that
+renders late, a modal, an infinite-scroll list), or to set fallbacks shared by every
+button:
+
+```html
+<script>
+  window.Cesto.bindInvestButtons({
+    apiKey: 'cesto_pk_your_key',       // fallback for elements without data-cesto-pk
+    mode: 'dialog',                    // fallback for data-cesto-mode
+    theme: { accent: '#00CC55' },      // per-element data-cesto-* attributes override this
+    onSuccess: (e) => window.dataLayer.push({ event: 'cesto_invest', ...e }),
+    onError: (e) => console.error(e.code, e.message),
+  });
+</script>
+```
+
+| Option | Type | Meaning |
+| --- | --- | --- |
+| `apiKey` | `string` | Fallback publishable key |
+| `baseUrl` | `string` | Fallback invest app origin |
+| `mode` | `'dialog' \| 'popup'` | Fallback presentation mode |
+| `theme` | `InvestTheme` | Fallback theme; `data-cesto-*` attributes override it field by field |
+| `root` | `ParentNode` | Where to search for elements. Defaults to `document` |
+| callbacks | — | Every [event callback](/web-sdk/events), applied to all bound elements |
+
+It returns the number of elements **newly** bound, so calling it repeatedly is safe and
+cheap:
+
+```js
+const added = window.Cesto.bindInvestButtons({ apiKey: 'cesto_pk_your_key' });
+console.log(added, 'new invest buttons bound');
+```
+
+<Warning>
+  Callbacks passed to `bindInvestButtons` apply to *every* element it binds — there is no
+  per-element callback attribute. If different buttons need different handlers, either bind
+  them in separate calls scoped with `root`, or use the
+  [JavaScript API](/web-sdk/javascript) directly.
+</Warning>
+
+## Progressive enhancement with anchors
+
+`data-cesto-invest` works on any element, so an anchor pointing at the basket page is a
+good no-JavaScript fallback:
+
+```html
+<a
+  href="https://app.cesto.co/product/golden-age"
+  data-cesto-invest="golden-age"
+  data-cesto-pk="cesto_pk_your_key"
+>
+  Invest in Golden Age
+</a>
+```
+
+With the script loaded, the click opens the dialog and the navigation is suppressed.
+Without it, the link goes to the basket page as normal.
+
+<Note>
+  Once bound, the loader calls `preventDefault()` on **every** click — including one where
+  opening the flow fails (a rejected `data-cesto-base-url`, for example). It logs
+  `[Cesto] could not open the invest flow` rather than silently navigating to the `href`,
+  so a misconfigured button is visible instead of quietly degrading.
+</Note>
+
+## When not to use this
+
+`bindInvestButtons` is built for pages where elements are *added* but not churned: it never
+removes its click listeners and never prunes its loader cache. Both are bounded by the
+number of distinct key + origin pairs on the page — one, for a real integration — not by
+the number of buttons or clicks.
+
+A long-lived SPA that repeatedly mounts and unmounts invest buttons should use
+[`@cesto/react`](/web-sdk/react) (`useCestoInvest`) or hold its own
+[`Cesto` instance](/web-sdk/javascript), so listeners follow the component lifecycle.
+
+## Next
+
+<CardGroup cols={2}>
+  <Card title="Theming" icon="palette" href="/web-sdk/theming">
+    Every token, and how a bad value fails safe.
+  </Card>
+  <Card title="Events" icon="bell" href="/web-sdk/events">
+    What you can hook into from `bindInvestButtons`.
+  </Card>
+</CardGroup>

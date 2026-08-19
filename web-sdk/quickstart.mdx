@@ -1,0 +1,134 @@
+---
+title: "Quickstart"
+icon: "rocket"
+description: "A working Cesto invest button on your page — in a script tag, in plain JavaScript, or in React."
+---
+
+Three paths to the same flow. Pick the one that matches your stack; they all take the same
+options and fire the same [events](/web-sdk/events).
+
+<Info>
+  You need a publishable key (`cesto_pk_…`) and the origins you will embed from registered
+  against it — see [API keys](/developers/api-keys). And a basket slug: the last path
+  segment of `app.cesto.co/product/<slug>`.
+</Info>
+
+## Script tag
+
+For static sites, CMS pages, Webflow, or anywhere you can only add HTML. The IIFE bundle
+auto-binds every `[data-cesto-invest]` element on `DOMContentLoaded` and exposes
+`window.Cesto`.
+
+```html
+<script src="https://cdn.jsdelivr.net/npm/@cesto/web-sdk/dist/cesto-invest.iife.js" defer></script>
+
+<button
+  data-cesto-invest="golden-age"
+  data-cesto-pk="cesto_pk_your_key"
+  data-cesto-amount="100"
+>
+  INVEST NOW
+</button>
+```
+
+That is the whole integration. Full attribute list and dynamic binding:
+[Script tag](/web-sdk/script-tag).
+
+## JavaScript
+
+```bash
+npm install @cesto/web-sdk
+```
+
+```ts
+import { Cesto } from '@cesto/web-sdk';
+
+const cesto = new Cesto({ apiKey: 'cesto_pk_your_key' });
+
+document.querySelector('#invest').addEventListener('click', () => {
+  const session = cesto.invest({
+    basket: 'golden-age',
+    amountUsd: 100,             // optional prefill
+    onSuccess: (e) => console.log('invested', e.amountUsd, 'in', e.basket),
+    onScheduled: (e) => console.log('scheduled for', e.scheduledFor),
+    onError: (e) => console.error(e.code, e.message),
+    onClose: () => console.log('dialog closed'),
+  });
+
+  // session.focus(); session.close(); session.isOpen;
+});
+```
+
+Full reference: [JavaScript API](/web-sdk/javascript).
+
+## React
+
+```bash
+npm install @cesto/react
+```
+
+Wrap once, then drop buttons in anywhere below it:
+
+```tsx
+import { CestoProvider, CestoInvestButton } from '@cesto/react';
+
+export function App() {
+  return (
+    <CestoProvider
+      apiKey="cesto_pk_your_key"
+      theme={{ accent: '#00CC55', radius: '12px', scheme: 'dark' }}
+      onSuccess={(e) => analytics.track('invest', e)}
+    >
+      <CestoInvestButton basket="golden-age" amountUsd={100} size="lg">
+        Invest now
+      </CestoInvestButton>
+    </CestoProvider>
+  );
+}
+```
+
+The button is styled out of the box and takes its accent and radius from the same `theme`
+as the dialog, so the two always match. Full reference: [React](/web-sdk/react).
+
+## Verify it works
+
+Open your page and click the button. In order, you should see:
+
+<Steps>
+  <Step title="The dialog appears">
+    A backdrop plus a centered modal (a bottom sheet on mobile) rendered by the invest app
+    inside the frame. `onReady` fires just before it becomes visible.
+  </Step>
+  <Step title="Your branding switches on">
+    `onVerified` fires with `{ partner }` once the backend matches your key to this origin.
+    If it never fires, the origin is not registered — the flow still works, just unbranded.
+    See [Troubleshooting](/web-sdk/troubleshooting#onverified-never-fires).
+  </Step>
+  <Step title="The invest completes">
+    `onSuccess` with `{ basket, amountUsd, status }` — or `onScheduled` if the market is
+    closed and the invest was queued for market open.
+  </Step>
+</Steps>
+
+<Warning>
+  Keep `invest()` synchronous inside the click handler. An `await` or a `setTimeout` before
+  it breaks the user-gesture chain and browsers will block the
+  [popup path](/web-sdk/modes) — which the dialog can fall back to at any time.
+</Warning>
+
+## Next
+
+<CardGroup cols={2}>
+  <Card title="Theming" icon="palette" href="/web-sdk/theming">
+    Match the dialog to your site with eight tokens.
+  </Card>
+  <Card title="Events" icon="bell" href="/web-sdk/events">
+    What each callback means, and how often it fires.
+  </Card>
+  <Card title="Modes" icon="window-restore" href="/web-sdk/modes">
+    Dialog vs popup, and what happens when a login can't be framed.
+  </Card>
+  <Card title="Troubleshooting" icon="wrench" href="/web-sdk/troubleshooting">
+    Popup blockers, COOP, CSP, and testing locally.
+  </Card>
+</CardGroup>

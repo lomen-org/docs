@@ -1,0 +1,175 @@
+---
+title: "JavaScript API"
+icon: "js"
+description: "The Cesto loader class: construct once, call invest() inside a click handler, hold the session."
+---
+
+`@cesto/web-sdk` exports one class and one helper. This page covers the class; the helper
+is documented under [Script tag](/web-sdk/script-tag).
+
+```bash
+npm install @cesto/web-sdk
+```
+
+```ts
+import { Cesto, bindInvestButtons } from '@cesto/web-sdk';
+```
+
+The package ships ESM, CJS, and an IIFE bundle, is side-effect free, and has no runtime
+dependencies beyond the protocol types.
+
+## `new Cesto(config)`
+
+```ts
+const cesto = new Cesto({
+  apiKey: 'cesto_pk_your_key',
+  theme: { scheme: 'dark' },          // default for every invest() from this instance
+});
+```
+
+| Option | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `apiKey` | `string` | — | **Required.** Publishable key (`cesto_pk_…`). Public by design |
+| `baseUrl` | `string` | `https://app.cesto.co` | Invest app origin |
+| `theme` | `InvestTheme` | — | Default theme; per-call values override it field by field |
+
+The constructor throws if `apiKey` is missing, and throws if `baseUrl` is not a `cesto.co`
+origin (or `localhost` / `127.0.0.1` for development). Constructing also warms DNS and TLS
+to the app origin, so the first open doesn't pay the handshake — build the instance at
+module scope, not inside the click handler.
+
+Reuse one instance per key. It tracks the currently open session, so a second `invest()`
+call while one is open focuses the existing surface instead of opening a second one.
+
+## `cesto.invest(options)`
+
+Opens the invest flow and returns an [`InvestSession`](#investsession).
+
+```ts
+button.addEventListener('click', () => {
+  const session = cesto.invest({
+    basket: 'golden-age',
+    amountUsd: 100,
+    mode: 'dialog',
+    theme: { accent: '#00CC55' },
+    onSuccess: (e) => analytics.track('invest', e),
+    onError: (e) => console.error(e.code, e.message),
+    onClose: () => setPending(false),
+  });
+});
+```
+
+| Option | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `basket` | `string` | — | **Required.** Basket slug, or product UUID |
+| `amountUsd` | `number` | — | USD prefill. Validated against the basket minimum inside the flow |
+| `mode` | `'dialog' \| 'popup'` | `'dialog'` | Presentation. See [Modes](/web-sdk/modes) |
+| `theme` | `InvestTheme` | — | Merged over the constructor default, field by field |
+| callbacks | — | — | See [Events](/web-sdk/events) |
+
+<Warning>
+  Call `invest()` **synchronously** inside the click handler. In popup mode it calls
+  `window.open` directly, and in dialog mode the
+  [popup fallback](/web-sdk/modes#automatic-popup-fallback) may need to. An `await` or a
+  timer between the click and the call breaks the user-gesture chain and the browser blocks
+  the window.
+</Warning>
+
+### `InvestSession`
+
+```ts
+interface InvestSession {
+  focus(): void;   // brings the popup window forward; focuses the iframe in dialog mode
+  close(): void;   // tears down the surface and fires onClose (once)
+  readonly isOpen: boolean;
+}
+```
+
+`close()` only dismisses the surface. An execution already in flight continues server-side
+— closing the dialog is not a cancel.
+
+<Note>
+  If the popup was blocked *and* the fallback navigation ran, `invest()` returns an inert
+  session: `isOpen` is `false` and `focus()` / `close()` do nothing. There is no window left
+  to control. See [Troubleshooting](/web-sdk/troubleshooting#the-popup-was-blocked).
+</Note>
+
+## `bindInvestButtons(options)`
+
+Declarative binding for `[data-cesto-invest]` elements. Returns the number of elements
+newly bound. Full reference: [Script tag](/web-sdk/script-tag#binding-manually).
+
+## Types
+
+Every type is exported for your own signatures:
+
+```ts
+import type {
+  CestoConfig,
+  InvestOptions,
+  InvestMode,          // 'dialog' | 'popup'
+  InvestTheme,
+  InvestSession,
+  InvestCallbacks,
+  InvestSuccessEvent,        // { basket, amountUsd, status }
+  InvestScheduledEvent,      // { basket, scheduledFor }
+  InvestErrorEvent,          // { code, message }
+  InvestVerifiedEvent,       // { partner }
+  InvestPositionClosedEvent, // { basket, positionId?, status }
+  InvestHandoffEvent,        // { reason }
+  BindInvestButtonsOptions,
+} from '@cesto/web-sdk';
+```
+
+## A complete example
+
+```ts
+import { Cesto, type InvestSuccessEvent } from '@cesto/web-sdk';
+
+// Module scope: constructed once, warms the connection before any click.
+const cesto = new Cesto({
+  apiKey: import.meta.env.VITE_CESTO_PK,
+  theme: { accent: '#00CC55', background: '#091313', scheme: 'dark' },
+});
+
+const button = document.querySelector<HTMLButtonElement>('#invest')!;
+const status = document.querySelector<HTMLElement>('#status')!;
+
+function onInvested(event: InvestSuccessEvent) {
+  status.textContent = `Invested $${event.amountUsd} in ${event.basket}.`;
+  analytics.track('cesto_invest_success', event);
+}
+
+button.addEventListener('click', () => {
+  button.setAttribute('aria-busy', 'true');
+
+  cesto.invest({
+    basket: button.dataset.basket!,
+    amountUsd: 100,
+    onVerified: ({ partner }) => console.debug('[cesto] verified for', partner),
+    onSuccess: onInvested,
+    onScheduled: ({ scheduledFor }) => {
+      status.textContent = scheduledFor
+        ? `Market closed — queued for ${new Date(scheduledFor).toLocaleString()}.`
+        : 'Market closed — queued for the next open.';
+    },
+    onError: ({ code, message }) => {
+      status.textContent = `Something went wrong (${code}).`;
+      console.error('[cesto]', code, message);
+    },
+    // Fires on dismissal, including after a success. Never treat it as failure.
+    onClose: () => button.removeAttribute('aria-busy'),
+  });
+});
+```
+
+## Next
+
+<CardGroup cols={2}>
+  <Card title="Events" icon="bell" href="/web-sdk/events">
+    Every callback, its payload, and how often it fires.
+  </Card>
+  <Card title="Modes" icon="window-restore" href="/web-sdk/modes">
+    Dialog vs popup, the fallback, and the login handoffs.
+  </Card>
+</CardGroup>

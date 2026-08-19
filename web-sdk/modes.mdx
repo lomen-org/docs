@@ -1,0 +1,152 @@
+---
+title: "Modes"
+icon: "window-restore"
+description: "In-page dialog or popup window — how each behaves, when the loader switches between them, and what happens when a login can't be framed."
+---
+
+`invest()` takes a `mode`: `'dialog'` (the default) or `'popup'`. Both share the same
+options and the same [events](/web-sdk/events); what differs is where the flow is painted
+and a handful of browser behaviours that follow from that.
+
+| | Dialog (default) | Popup |
+| --- | --- | --- |
+| Surface | A full-viewport iframe overlaid on your page | A separate browser window |
+| Cesto session | Partitioned — the user signs in inside the dialog | Shared with `app.cesto.co` |
+| Wallet extensions | Relayed through your page | Direct (the window is top-level) |
+| Google sign-in | Hands off to a top-level window | In place |
+| Affected by COOP | No | **Yes** — see [below](#coop-and-popup-mode) |
+| Blocked by a popup blocker | Only on fallback | Possible |
+
+## Dialog mode
+
+The loader injects a single full-viewport transparent iframe pointing at the Cesto invest
+app. The dialog chrome — backdrop, centered modal on desktop, bottom sheet on mobile, the
+close button — is rendered **by the invest app inside the frame**, not by the SDK.
+
+Backdrop clicks, `Escape` pressed inside the frame, and the close button are all handled by
+the app, which tells the SDK to tear the frame down; `Escape` pressed on your page works
+too. All of those fire `onClose` exactly once.
+
+While the dialog is open, page scrolling is locked. The frame stays invisible until the app
+signals it is ready — no half-loaded flash — and the fade-in respects
+`prefers-reduced-motion`.
+
+<Note>
+  **Sessions are partitioned.** The dialog iframe runs with partitioned storage, so a user
+  already logged in on `app.cesto.co` is asked to sign in again inside the dialog. This is
+  a browser guarantee, not a Cesto choice. Popup mode shares the app session.
+</Note>
+
+## Popup mode
+
+```ts
+cesto.invest({ basket: 'golden-age', mode: 'popup' });
+```
+
+Opens a separate, centered browser window. Reach for it if your page cannot be overlaid —
+a strict CSP on your side interfering with overlays, for instance — or you simply prefer
+the detached window. It is also what the dialog falls back to.
+
+## Automatic popup fallback
+
+If the dialog iframe does not become ready within **20 seconds** — framing blocked by an
+extension, a network failure, an unsupported browser — the overlay swaps to a small panel
+offering **"Continue in new window"**, which opens the popup path with the same options.
+
+The failure is remembered for the rest of the tab session (a `sessionStorage` key,
+`cesto-invest:force-popup`), so subsequent `invest()` calls go straight to popup mode
+without retrying the iframe.
+
+<Warning>
+  This is why `invest()` must be called **synchronously** inside the click handler even
+  when you use the default dialog mode: once the fallback is latched, the very next call
+  opens a window, and a window opened outside a user gesture is blocked.
+</Warning>
+
+## Google login in dialog mode
+
+Google's consent screen and Privy's auth host both answer `X-Frame-Options: DENY`, so a
+Google sign-in cannot run inside the dialog iframe at all — and storage partitioning means
+a session obtained anywhere else is invisible to the frame.
+
+So when a user picks "Continue with Google", the dialog opens a **top-level
+`app.cesto.co` window**, and the sign-in, funding, and invest all complete there.
+
+Your dialog does not go away. It stays on your page showing a "continue in the new window"
+state, fires [`onHandoff`](/web-sdk/events) with `{ reason: 'google-login' }`, and keeps
+listening: when the window reports a completed invest, the dialog relays `onSuccess` to
+you, shows the celebration in place, and closes the window. The user's attention comes back
+to your page rather than being stranded in a Cesto window. If they close the window
+instead, the dialog returns to the sign-in screen.
+
+```ts
+cesto.invest({
+  basket: 'golden-age',
+  onHandoff: () => setHint('Finish signing in in the new window — we’ll pick up here.'),
+  onSuccess: (e) => celebrate(e),
+});
+```
+
+<Note>
+  `onHandoff` is informational and is **not** an ending. Don't treat it as a failure or
+  tear down your UI. Popup mode never fires it — a popup is already top-level, so it signs
+  in in place.
+</Note>
+
+## Wallet login in dialog mode
+
+Browser-wallet extensions (Phantom, Solflare, Backpack) inject their providers only into
+top-level pages, never into cross-origin iframes. The dialog therefore cannot talk to the
+user's wallet directly.
+
+Instead, the invest app proxies wallet requests through the SDK, which runs top-level on
+**your** page where `window.phantom` and friends exist. The dialog asks the SDK to detect
+installed wallets, connect one, and sign the login challenge; the SDK relays each answer
+back over the same pinned message channel (exact iframe window, exact Cesto origin).
+
+In practice: the wallet extension's approval prompt appears on your page, anchored to your
+origin, while the dialog stays open. Once the user approves, the dialog receives the
+address and signature and completes the login inside the iframe. If the user rejects, the
+dialog is told so and lets them retry.
+
+The relay can detect providers, request a connect, and request signatures — of a login
+challenge and, on the funding path, of a transaction the app composed. It can never
+*originate* one: the app checks that the returned transaction's serialized message is
+byte-identical to what it sent, so your page can only add signatures, never alter what is
+being signed. No keys or secrets pass through your page. See
+[Security](/web-sdk/security#the-wallet-relay).
+
+Popup mode needs none of this — the popup window is itself top-level.
+
+<Info>
+  Nothing to implement here. The relay is part of the loader and is on whenever dialog mode
+  is. It is documented because it explains why a wallet prompt appears over *your* site.
+</Info>
+
+## COOP and popup mode
+
+If your page is served with `Cross-Origin-Opener-Policy: same-origin`, the browser severs
+the link between your page and the popup (`window.opener` becomes `null`). The invest flow
+still completes inside the popup, but **your callbacks will not fire**.
+
+If you need the events, serve the embedding page with `same-origin-allow-popups` (or no
+COOP header). Dialog mode is unaffected.
+
+## When the popup is blocked
+
+If a popup is blocked anyway, the loader falls back to a **full-page navigation** to the
+invest URL. In that case the SDK cannot observe the outcome, and the visitor is not
+automatically returned to your page — the loader deliberately sends no `return_url`,
+because an unvalidated return target on a signing origin is an open redirect. If you need a
+return journey, it has to be built with server-side validation against the origins
+registered for your publishable key.
+
+## Choosing
+
+- **Default to dialog.** The user never leaves your page, COOP doesn't matter, and the
+  popup path is still there as a fallback.
+- **Choose popup** if your own CSP or layout makes a full-viewport overlay impractical, or
+  if the shared `app.cesto.co` session is worth more to your users than staying in place.
+
+Either way, write your integration as if the popup path can happen — because with the
+fallback, it can.

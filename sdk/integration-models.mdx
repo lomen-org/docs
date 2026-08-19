@@ -44,8 +44,8 @@ client-signed (BYOW) flows — so you can tell which path is yours before you wr
 | Model | Solana wallet owner | Who signs | SDK flow |
 | --- | --- | --- | --- |
 | Managed wallets (Cesto-managed Privy) | Cesto (Privy) | Cesto, server-side | [`*.start`, no `consent`](/sdk/managed-wallets) |
-| Your own Privy | You (your Privy app) | Your backend, via Privy | [One-call](/sdk/open-position#one-call-flow-you-hold-the-keypair) |
-| Browser EOA | The end user | The user, in the browser | [Split flow](/sdk/open-position#split-flow-browser-wallet-signs) |
+| Your own Privy | You (your Privy app) | Your backend, via Privy | [One-call](/sdk/open-position) |
+| Browser EOA | The end user | The user, in the browser | [Split flow](/sdk/open-position) |
 | Cross-chain (EVM) | Depends on the SVM wallet you map to | Owner of the mapped SVM wallet | Any of the above, after bridging |
 
 ## Managed wallets (Cesto-managed Privy) — recommended
@@ -107,7 +107,7 @@ const result = await cesto.open.execute({
 ```
 
 `signWithPrivy` is your own helper over Privy's server-side signing — the SDK never sees the
-key. See the [one-call flow](/sdk/open-position#one-call-flow-you-hold-the-keypair) for the
+key. See the [one-call flow](/sdk/open-position) for the
 full callback contract.
 
 ### Browser EOA (Phantom or Solflare)
@@ -121,7 +121,7 @@ prepare (backend) ─▶ sign (browser wallet) ─▶ submit (backend) ─▶ po
 
 Prepared transactions expire ~60s after `prepare`, and the wallet must sign them
 **byte-for-byte** — any modification is rejected at submit. Walk through it in
-[Open a Position → Split flow](/sdk/open-position#split-flow-browser-wallet-signs).
+[Open a Position → Split flow](/sdk/open-position).
 
 ## Cross-chain users (EVM to Solana)
 

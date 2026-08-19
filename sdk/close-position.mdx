@@ -58,7 +58,7 @@ who signs.
     result.transactions; // per-leg { nodeId, ok, signature?, error? }
     ```
 
-    See [Open a Position](/sdk/open-position#one-call-flow-you-hold-the-keypair) for the
+    See [Open a Position](/sdk/open-position) for the
     full `signWithKeypair` setup (and how to supply your own `signTransactions` callback
     instead). The keypair stays server-side, loaded from the environment — never hardcoded,
     never shipped to a client.
@@ -80,7 +80,7 @@ who signs.
       </Step>
       <Step title="Browser: the user signs">
         Sign the transactions **as-is** — any modified byte is rejected at submit. Same
-        signing code as the [open flow](/sdk/open-position#split-flow-browser-wallet-signs).
+        signing code as the [open flow](/sdk/open-position).
       </Step>
       <Step title="Backend: submit and wait">
         ```ts
@@ -108,7 +108,7 @@ who signs.
     Returns `{ executionId, transactions, expiresAt }`.
 
     `positions.submit`, `getExecution`, and `waitForExecution` are shared with the open
-    flow — see the [method reference](/sdk/open-position#method-reference) there.
+    flow — see the [method reference](/sdk/open-position) there.
   </Tab>
 </Tabs>
 

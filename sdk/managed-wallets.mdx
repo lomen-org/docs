@@ -207,7 +207,7 @@ result.transactions; // per-leg { nodeId, ok, signature?, error? }
 `close.startAndWait` and `rebalance.startAndWait` take the same params as their `start`
 counterparts. To
 poll an execution you kicked off with the plain variants, use the shared
-[`positions.getExecution` / `positions.waitForExecution`](/sdk/open-position#method-reference)
+[`positions.getExecution` / `positions.waitForExecution`](/sdk/open-position)
 with the returned `executionId` — polling is identical in both models.
 
 <Warning>
