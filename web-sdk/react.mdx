@@ -1,0 +1,292 @@
+---
+title: "React"
+icon: "react"
+description: "@cesto/react: a provider, a styled invest button with every escape hatch, and a hook for your own UI."
+---
+
+```bash
+npm install @cesto/react
+```
+
+`@cesto/react` wraps [`@cesto/web-sdk`](/web-sdk/javascript) — you don't need to install
+both. It requires **React 18 or later**, is client-only, and ships a `'use client'` banner,
+so you can import it straight from a server component. Callbacks, being functions, still
+have to live in a client component.
+
+## `<CestoProvider>`
+
+Supplies the key, theme, mode, and default callbacks to everything below it, and owns a
+single shared loader instance. Wrap your app once:
+
+```tsx
+import { CestoProvider } from '@cesto/react';
+
+<CestoProvider
+  apiKey="cesto_pk_your_key"
+  theme={{ accent: '#00CC55', radius: '12px', scheme: 'dark' }}
+  onSuccess={(e) => analytics.track('invest', e)}
+>
+  <App />
+</CestoProvider>;
+```
+
+| Prop | Type | Meaning |
+| --- | --- | --- |
+| `apiKey` | `string` | **Required.** Publishable key (`cesto_pk_…`) |
+| `baseUrl` | `string` | Invest app origin. Defaults to `https://app.cesto.co` |
+| `theme` | `InvestTheme` | Default theme for every invest below this provider |
+| `mode` | `'dialog' \| 'popup'` | Default presentation mode |
+| callbacks | — | `onReady`, `onVerified`, `onSuccess`, `onScheduled`, `onError`, `onPositionClosed`, `onHandoff`, `onClose` — see [Events](/web-sdk/events) |
+
+Provider callbacks run **before** any per-hook or per-call callback, so the provider is the
+right place for analytics and the call site is the right place for UI state.
+
+Nesting is supported — the nearest provider wins. Inline arrow callbacks and inline theme
+literals are safe: both are latched by content, not identity, so they never churn the
+context value or recreate the loader.
+
+<Note>
+  When the provider unmounts, an open dialog is closed. The overlay is attached to
+  `document.body` by the loader, so a route change would otherwise strand it on the page.
+  Closing only tears down the surface — an execution already in flight continues
+  server-side.
+</Note>
+
+## `<CestoInvestButton>`
+
+The CTA. Styled out of the box, themed from the same accent and radius as the dialog it
+opens, and every escape hatch is first-class.
+
+```tsx
+<CestoInvestButton basket="golden-age" amountUsd={100} size="lg">
+  Invest now
+</CestoInvestButton>
+```
+
+| Prop | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `basket` | `string` | — | **Required.** Basket slug or product UUID |
+| `amountUsd` | `number` | — | USD prefill |
+| `apiKey` | `string` | provider's | Overrides the provider's key for this button |
+| `baseUrl` | `string` | provider's | Invest app origin override |
+| `mode` | `'dialog' \| 'popup'` | provider's | Presentation mode |
+| `theme` | `InvestTheme` | — | Merged over the provider's theme, field by field |
+| `variant` | `'primary' \| 'secondary' \| 'outline'` | `'primary'` | Bundled look |
+| `size` | `'sm' \| 'md' \| 'lg'` | `'md'` | Bundled size |
+| `unstyled` | `boolean` | `false` | Drop the bundled styles entirely; behaviour unchanged |
+| `asChild` | `boolean` | `false` | Render `children` as the trigger instead of a `<button>` |
+| `pendingWhileOpen` | `boolean` | `true` | Show a spinner and `aria-busy` while the flow is open |
+| callbacks | — | — | Same set as the provider, run after it |
+
+It also forwards a `ref` to the underlying element and spreads every native button
+attribute (`type` defaults to `"button"`). While a flow is open the element carries
+`data-cesto-state="open"`, which you can style against.
+
+### Using your own design system
+
+`asChild` merges the trigger onto your element instead of rendering a `<button>`:
+
+```tsx
+<CestoInvestButton basket="golden-age" asChild>
+  <MyButton variant="brand">Invest</MyButton>
+</CestoInvestButton>
+```
+
+`asChild` opts out of the bundled spinner too — the child element's content is yours, and
+is passed through untouched. Read `isOpen` from [`useCestoInvest`](#usecestoinvest) if you
+want your own pending state.
+
+### Using your own CSS
+
+```tsx
+<CestoInvestButton basket="golden-age" unstyled className="my-cta">
+  Invest
+</CestoInvestButton>
+```
+
+<Tip>
+  The bundled button inherits your page's `font-family` on purpose, so it never lands as a
+  fallback-font CTA in someone else's typography. Only the accent, its paired text ink, and
+  the radius come from the theme.
+</Tip>
+
+### Gating on your own validation
+
+Your `onClick` runs first. Call `preventDefault()` to suppress the flow:
+
+```tsx
+<CestoInvestButton
+  basket="golden-age"
+  onClick={(e) => {
+    if (!termsAccepted) {
+      e.preventDefault();
+      setShowTerms(true);
+    }
+  }}
+>
+  Invest now
+</CestoInvestButton>
+```
+
+### Strict CSP
+
+The stylesheet is injected at runtime, which a `style-src` without `'unsafe-inline'`
+blocks — the button would render unstyled. Import the stylesheet instead and mark the
+document so the runtime injection stands down:
+
+```tsx
+import '@cesto/react/styles.css';
+```
+
+```html
+<html data-cesto-invest-button-external>
+```
+
+Both stylesheets are emitted from the same source at build time, so importing without the
+marker is harmless — just a duplicate, byte-identical rule set. The raw CSS is also
+exported as `CESTO_BUTTON_CSS` if you'd rather inline it yourself.
+
+## `useCestoInvest()`
+
+The hook behind the button. Use it when you want the flow but not the CTA.
+
+```tsx
+import { useCestoInvest } from '@cesto/react';
+
+function InvestPanel() {
+  const { invest, isOpen, status, error, close } = useCestoInvest();
+
+  return (
+    <>
+      <MyButton onClick={() => invest({ basket: 'golden-age', amountUsd: 100 })}>
+        {status === 'success' ? 'Invested' : 'Invest'}
+      </MyButton>
+      {error && <p role="alert">{error.message}</p>}
+      {isOpen && <button onClick={close}>Cancel</button>}
+    </>
+  );
+}
+```
+
+**Returns**
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `invest` | `(options: InvestOptions) => InvestSession` | Opens the flow. Stable identity across renders |
+| `close` | `() => void` | Closes the current flow, if one is open |
+| `focus` | `() => void` | Brings the current flow to the front |
+| `isOpen` | `boolean` | True between `invest()` and `onClose` |
+| `status` | `'idle' \| 'open' \| 'success' \| 'scheduled' \| 'error'` | Lifecycle of the most recent attempt |
+| `session` | `InvestSession \| null` | The most recent session, or `null` before the first invest |
+| `error` | `InvestErrorEvent \| null` | Most recent error. Cleared on the next `invest()` |
+
+**Options** — `apiKey`, `baseUrl`, `theme`, `mode`, plus any
+[callbacks](/web-sdk/events). Passing `apiKey`, `baseUrl`, or `theme` gives the hook its
+**own** loader rather than the provider's shared one.
+
+The hook works with **or without** a provider. Without one, pass `apiKey` directly:
+
+```tsx
+const { invest } = useCestoInvest({ apiKey: 'cesto_pk_your_key' });
+```
+
+<Note>
+  `status === 'success'` and `isOpen === true` is a normal, reachable combination: the flow
+  stays open after a success until the user dismisses it. Track the two separately rather
+  than deriving one from the other.
+</Note>
+
+<Warning>
+  Call `invest()` synchronously in the event handler — no `await` before it. See
+  [popup blockers](/web-sdk/troubleshooting#the-popup-was-blocked).
+</Warning>
+
+### Errors before the flow opens
+
+If the loader can't be built — a missing key, a rejected `baseUrl`, or a non-browser
+environment — `invest()` does not throw. It fires `onError` with
+`code: 'config_error'`, sets `status` to `'error'`, and returns an inert session. That
+keeps a misconfiguration observable in your own error handling instead of crashing a render.
+
+## Next.js App Router
+
+The package is client-only and carries a `'use client'` banner, so a server component can
+import and render `<CestoProvider>` and `<CestoInvestButton>` directly — no wrapper needed.
+Callbacks are functions and cannot cross the server boundary, so put any component that
+passes them in a `'use client'` file:
+
+```tsx
+// app/providers.tsx
+'use client';
+import { CestoProvider } from '@cesto/react';
+
+export function Providers({ children }: { children: React.ReactNode }) {
+  return (
+    <CestoProvider
+      apiKey={process.env.NEXT_PUBLIC_CESTO_PK!}
+      onSuccess={(e) => analytics.track('invest', e)}
+    >
+      {children}
+    </CestoProvider>
+  );
+}
+```
+
+```tsx
+// app/page.tsx — a server component
+import { CestoInvestButton } from '@cesto/react';
+
+export default function Page() {
+  return <CestoInvestButton basket="golden-age">Invest now</CestoInvestButton>;
+}
+```
+
+<Tip>
+  A publishable key belongs in a public env var (`NEXT_PUBLIC_…`). It is meant to be in the
+  bundle — see [API keys](/developers/api-keys).
+</Tip>
+
+## Exports
+
+```ts
+import {
+  CestoProvider,
+  CestoInvestButton,
+  useCestoInvest,
+  CESTO_BUTTON_CSS,
+} from '@cesto/react';
+
+import type {
+  CestoProviderProps,
+  CestoInvestButtonProps,
+  CestoInvestButtonVariant,
+  CestoInvestButtonSize,
+  UseCestoInvestOptions,
+  UseCestoInvestResult,
+  InvestStatus,
+  // re-exported from @cesto/web-sdk
+  CestoConfig,
+  InvestOptions,
+  InvestMode,
+  InvestTheme,
+  InvestSession,
+  InvestCallbacks,
+  InvestSuccessEvent,
+  InvestScheduledEvent,
+  InvestErrorEvent,
+  InvestVerifiedEvent,
+  InvestPositionClosedEvent,
+  InvestHandoffEvent,
+} from '@cesto/react';
+```
+
+## Next
+
+<CardGroup cols={2}>
+  <Card title="Events" icon="bell" href="/web-sdk/events">
+    Every callback, and the order provider → hook → call site.
+  </Card>
+  <Card title="Theming" icon="palette" href="/web-sdk/theming">
+    The tokens shared by the button and the dialog.
+  </Card>
+</CardGroup>

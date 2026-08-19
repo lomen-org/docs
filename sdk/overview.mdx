@@ -1,10 +1,10 @@
 ---
-title: "Cesto SDK"
-icon: "code"
+title: "Server SDK"
+icon: "server"
 description: "A typed, server-side TypeScript client for the Cesto API: baskets, positions, managed wallets, and client-signed open / close / rebalance."
 ---
 
-The **Cesto SDK** (`@cesto/sdk`) is a typed TypeScript client for the Cesto API.
+The **Cesto Server SDK** (`@cesto/sdk`) is a typed TypeScript client for the Cesto API.
 Use it to list and inspect baskets (products), look up a user's positions by their
 Solana wallet, and open, close, or rebalance positions — either on **managed wallets**
 (Cesto provisions and signs, you never touch a key) or with client-signed transactions —
@@ -42,6 +42,9 @@ all behind a single API key.
 <Warning>
   Never use the SDK in browser / client-side code; your secret key would be exposed to end
   users. It is meant for backends, scripts, and serverless / edge functions.
+
+  Need something in the browser? Use the [Web SDK](/web-sdk/overview) for an in-page invest
+  flow, or the keyless [browser client](/sdk/browser-client) for public reads.
 </Warning>
 
 ## Install
@@ -94,7 +97,15 @@ const { executionId } = await cesto.open.start({
 ```
 
 <Note>
-  You need an API key to use the SDK. See [Authentication](/sdk/authentication) to request one.
+  You need a **secret** API key (`cesto_sk_…`) to use this SDK. See
+  [Authentication](/sdk/authentication) to request one, or
+  [API keys](/developers/api-keys) for how it differs from the Web SDK's publishable key.
+</Note>
+
+<Note>
+  Not sure this is the right surface? [Choose your
+  integration](/developers/choose-an-integration) compares it with
+  [Widgets](/widgets/overview) and the [Web SDK](/web-sdk/overview) in one page.
 </Note>
 
 <Note>
@@ -126,6 +137,12 @@ const { executionId } = await cesto.open.start({
   <Card title="Positions" icon="wallet" href="/sdk/positions">
     Positions by wallet.
   </Card>
+  <Card title="Fees" icon="receipt" href="/sdk/fees">
+    Price a basket investment before the user commits.
+  </Card>
+  <Card title="Users" icon="user-check" href="/sdk/users">
+    Resolve a Solana wallet to an existing Cesto user.
+  </Card>
   <Card title="Open a Position" icon="circle-plus" href="/sdk/open-position">
     Open positions with client-signed transactions.
   </Card>
@@ -137,6 +154,9 @@ const { executionId } = await cesto.open.start({
   </Card>
   <Card title="Bridging (CCTP)" icon="bridge" href="/sdk/bridging">
     Bridge USDC between EVM chains and Solana, then invest the arrived amount.
+  </Card>
+  <Card title="Browser Client" icon="globe" href="/sdk/browser-client">
+    `@cesto/sdk/client` — public reads from the browser, no key.
   </Card>
   <Card title="Examples" icon="flask" href="/sdk/examples">
     Runnable Node.js examples for every feature.

@@ -55,7 +55,7 @@ exponential backoff and jitter, honoring the `Retry-After` header. Tune with `ma
 
 <Note>
   A handful of non-idempotent methods are **never retried automatically**, regardless of
-  `maxRetries`: [`positions.submit`](/sdk/open-position#method-reference) (a submit that
+  `maxRetries`: [`positions.submit`](/sdk/open-position) (a submit that
   timed out client-side may still have been accepted — poll `getExecution` instead of
   re-sending), the consent-path `open.start` / `close.start` / `rebalance.start`, and
   `bridge.submitBurn` / `bridge.initiate`.

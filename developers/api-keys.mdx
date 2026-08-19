@@ -1,0 +1,120 @@
+---
+title: "API keys"
+icon: "key"
+description: "Two credentials with different powers: a publishable cesto_pk_ key for the browser, and a secret cesto_sk_ key for your server."
+---
+
+Cesto issues two kinds of key. They are not interchangeable, and the difference is not
+cosmetic — one is designed to be visible in a page source, the other must never be.
+
+| | Publishable | Secret |
+| --- | --- | --- |
+| Looks like | `cesto_pk_…` | `cesto_sk_…` |
+| Used by | [Web SDK](/web-sdk/overview) (`@cesto/web-sdk`, `@cesto/react`) | [Server SDK](/sdk/overview) (`@cesto/sdk`) |
+| Safe in a client bundle | **Yes** — public by design | **No** — never |
+| Scoped by | Origin allowlist | Read / write permissions |
+| Grants on its own | Nothing | API access |
+| Needed for [Widgets](/widgets/overview) | — | — |
+
+<Note>
+  Keys are issued by the Cesto team — there is no self-serve portal yet. Request one on our
+  [community channel](https://t.me/cesto_co) or through your Cesto contact. Say which type
+  you need, and for a publishable key, the origins you will embed from.
+</Note>
+
+## Publishable keys (`cesto_pk_…`)
+
+The publishable key identifies **you, the partner**, to the invest flow. It works like a
+Stripe publishable key: it ships in your HTML or your JavaScript bundle, anyone can read
+it, and that is fine.
+
+It is safe because it grants nothing by itself. Every invest still requires the end user's
+own Cesto session and a per-action signed challenge — a copied key cannot move anyone's
+money. What the key does is unlock **partner branding and attribution**, and it only does
+that after the backend has validated the key against the **origin the request came from**.
+
+```ts
+import { Cesto } from '@cesto/web-sdk';
+
+// Fine to ship. Fine to commit. Fine in view-source.
+const cesto = new Cesto({ apiKey: 'cesto_pk_your_key' });
+```
+
+### The origin allowlist
+
+Every publishable key carries a list of origins it is valid on — the sites you told us you
+would embed from. Two things key off it:
+
+- **Verification.** Once the backend matches your key to the origin, the flow fires
+  [`onVerified`](/web-sdk/events) with `{ partner }` and switches on your branding and
+  attribution. On an unregistered origin the flow still *works*, it is just unbranded and
+  unattributed.
+- **Framing.** In [dialog mode](/web-sdk/modes) the invest page's `frame-ancestors` is
+  computed from the key, so only your registered origins can frame it. Someone who lifts
+  your key onto their own site gets an unframeable page.
+
+<Tip>
+  Register every origin you will actually load from, including staging and preview
+  deployments. `http://localhost:8787` (or whichever port you serve your test page on) is
+  worth asking for too — see [testing locally](/web-sdk/troubleshooting#testing-against-a-local-app).
+</Tip>
+
+### What a publishable key cannot do
+
+It cannot read positions, open or close on anyone's behalf, or reach any Server SDK route.
+It is not a lesser secret key; it is a different thing. If you need to *read* data in the
+browser without a key at all, use the [browser client](/sdk/browser-client).
+
+## Secret keys (`cesto_sk_…`)
+
+The secret key authenticates every [Server SDK](/sdk/overview) call. It is sent
+automatically — you never set headers yourself. Pass it to the constructor, typically from
+an environment variable:
+
+```ts
+import { Cesto } from '@cesto/sdk';
+
+const cesto = new Cesto({ apiKey: process.env.CESTO_API_KEY });
+```
+
+The SDK does **not** read environment variables itself: `apiKey` is required and the
+constructor throws without it. It also refuses to run in a browser.
+
+### Scopes
+
+Secret keys are **read** (default) or **write**-scoped:
+
+- **Read** — products, user lookups, and position reads (`products.*`, `users.get`,
+  `positions.list`, `positions.getHoldings`, `fees.*`).
+- **Write** — [provisioning and managed executions](/sdk/managed-wallets)
+  (`users.create`, `*.start`) and client-signed [open](/sdk/open-position) /
+  [close](/sdk/close-position) / [rebalance](/sdk/rebalance-position)
+  (`open.*`, `close.*`, `positions.submit`, execution polling).
+
+A read-only key gets a `403 PermissionDeniedError` on write routes. Ask for the scope you
+need when you request the key.
+
+<Warning>
+  Treat a `cesto_sk_…` like a password — keep it server-side, store it in a secret manager
+  or environment variable, and never commit it or bundle it into client code. To rotate or
+  revoke a key, contact the Cesto team.
+</Warning>
+
+## Backend URL
+
+Both SDKs point at production by default and need no configuration: the Server SDK targets
+`https://backend.cesto.co`, and the Web SDK opens `https://app.cesto.co`. The Web SDK's
+`baseUrl` override only accepts a `cesto.co` origin (or `localhost` for development) — a
+CMS-injected `data-cesto-base-url` cannot reroute the flow, and wallet prompts, somewhere
+else.
+
+## Next
+
+<CardGroup cols={2}>
+  <Card title="Web SDK quickstart" icon="browser" href="/web-sdk/quickstart">
+    Put an invest button on your page with a publishable key.
+  </Card>
+  <Card title="Server SDK quickstart" icon="server" href="/sdk/overview#quickstart">
+    First call with a secret key.
+  </Card>
+</CardGroup>

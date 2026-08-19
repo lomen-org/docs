@@ -1,0 +1,74 @@
+---
+title: "Developers"
+icon: "code"
+description: "Three ways to put Cesto baskets in your product — an embeddable widget, a drop-in invest button, or the full server API."
+---
+
+Cesto exposes three integration surfaces. They differ in how much of the experience you
+own and how much you have to build, and they are designed to be picked up in that order —
+you can start with an iframe today and move to the server SDK when you need it.
+
+<CardGroup cols={3}>
+  <Card title="Widgets" icon="shapes" href="/widgets/overview">
+    **No code.** One `<iframe>` renders a live basket card on your page. No key, no
+    JavaScript, no build step.
+  </Card>
+  <Card title="Web SDK" icon="browser" href="/web-sdk/overview">
+    **Frontend.** A drop-in invest flow on your own site: your CTA opens a themed Cesto
+    dialog, the user signs in, funds, and invests without leaving your page.
+  </Card>
+  <Card title="Server SDK" icon="server" href="/sdk/overview">
+    **Backend.** The full API in TypeScript: baskets, positions, managed wallets, and
+    client-signed open / close / rebalance. You build the entire UI.
+  </Card>
+</CardGroup>
+
+## At a glance
+
+| | [Widgets](/widgets/overview) | [Web SDK](/web-sdk/overview) | [Server SDK](/sdk/overview) |
+| --- | --- | --- | --- |
+| Where it runs | An iframe on your page | The browser, on your page | Your backend (Node 18+) |
+| What you write | One `<iframe>` tag | One button, or a React component | Your own product |
+| Key | None | Publishable `cesto_pk_…` | Secret `cesto_sk_…` |
+| Who owns the invest UI | Cesto | Cesto (themed by you) | You |
+| End user needs a Cesto account | Yes | Yes — they sign in inside the dialog | No |
+| Wallets | Cesto's | Cesto's | Managed by Cesto, or your own |
+| Outcome events | None | `onSuccess`, `onError`, … | Typed execution results |
+| Time to first invest | Minutes | Under an hour | A sprint |
+
+Not sure which one is yours? [Choose your integration](/developers/choose-an-integration)
+walks the decision in one page.
+
+## Before you start
+
+<Steps>
+  <Step title="Get a key">
+    Widgets need nothing. The Web SDK needs a **publishable** key and the origins you will
+    embed from; the Server SDK needs a **secret** key and a scope. See
+    [API keys](/developers/api-keys).
+  </Step>
+  <Step title="Find your basket slug">
+    Every basket has a slug — the last path segment of its URL on
+    `app.cesto.co/product/<slug>`. All three surfaces take that slug. You can also list
+    them programmatically with [`products.list`](/sdk/products).
+  </Step>
+  <Step title="Build">
+    Follow the quickstart for your surface: [Widgets usage](/widgets/usage),
+    [Web SDK quickstart](/web-sdk/quickstart), or the
+    [Server SDK quickstart](/sdk/overview#quickstart).
+  </Step>
+</Steps>
+
+## Mixing surfaces
+
+They compose. A common shape is a **widget** in a blog post or newsletter to show the
+basket, a **Web SDK** button on the landing page so the invest happens in place, and the
+**Server SDK** on your backend to read the resulting positions back into your own
+dashboard. They all key off the same basket slug, and a position opened through any of
+them is the same position.
+
+<Note>
+  The Web SDK's publishable key and the Server SDK's secret key are different credentials
+  with different powers. A `cesto_pk_…` is safe in a client bundle; a `cesto_sk_…` never
+  is. See [API keys](/developers/api-keys).
+</Note>

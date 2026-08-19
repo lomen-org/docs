@@ -1,0 +1,174 @@
+---
+title: "Events"
+icon: "bell"
+description: "Every callback the invest flow fires, what it carries, how often, and which ones actually mean something happened."
+---
+
+Callbacks are passed to `invest()` (or to `<CestoProvider>`, `<CestoInvestButton>`,
+`useCestoInvest`, or `bindInvestButtons` — the same set everywhere).
+
+| Callback | Fires when | Payload |
+| --- | --- | --- |
+| `onReady` | The invest surface booted and is about to be shown | — |
+| `onVerified` | The backend validated your key against this origin | `{ partner }` |
+| `onSuccess` | The invest completed in this session | `{ basket, amountUsd, status }` |
+| `onScheduled` | Market closed; the invest is queued for market open | `{ basket, scheduledFor }` |
+| `onError` | The invest failed | `{ code, message }` |
+| `onPositionClosed` | The user closed a position from inside the flow | `{ basket, positionId?, status }` |
+| `onHandoff` | The flow moved into a top-level Cesto window (dialog mode only) | `{ reason: 'google-login' }` |
+| `onClose` | The dialog was dismissed, or the popup window closed | — |
+
+## How often each fires
+
+Each callback fires **at most once per session** — with two exceptions:
+
+- **`onPositionClosed`** fires once per *closure*. A user can close several positions
+  without leaving the flow, and each one is reported.
+- **`onHandoff`** fires once per *handoff*. A user can cancel one sign-in window and start
+  another.
+
+## The ones that mean something happened
+
+<Warning>
+  Only **`onError`** means the invest failed. Only **`onPositionClosed`** means a position
+  was closed. `onClose` is about the *surface* being dismissed and nothing else.
+</Warning>
+
+`onClose` is ambiguous by design. It fires after a success too, because the user eventually
+dismisses the dialog or closes the window. At the moment it fires, the user may have
+invested, abandoned the flow, or still have an execution completing server-side. Use it to
+reset your own pending UI — never to record a failure or an abandonment.
+
+`onHandoff` is likewise **not** an ending: the dialog stays on your page and still reports
+`onSuccess` or `onError` when the window is done. See
+[Google login in dialog mode](/web-sdk/modes#google-login-in-dialog-mode).
+
+## Payloads
+
+```ts
+interface InvestSuccessEvent {
+  basket: string;      // the slug that was invested in
+  amountUsd: number;   // the USD amount
+  status: string;      // execution status reported by the app
+}
+
+interface InvestScheduledEvent {
+  basket: string;
+  scheduledFor: string | null;   // ISO timestamp when known; null if unavailable
+}
+
+interface InvestErrorEvent {
+  code: string;
+  message: string;
+}
+
+interface InvestVerifiedEvent {
+  partner: string;     // your partner identifier, as registered for the key
+}
+
+interface InvestPositionClosedEvent {
+  basket: string;
+  positionId?: string; // present when the app knows it
+  status: string;
+}
+
+interface InvestHandoffEvent {
+  reason: 'google-login';   // open-ended: more sign-in methods may follow
+}
+```
+
+<Note>
+  Treat `status` and `code` as opaque strings you log and branch on defensively, not as a
+  closed enum — the app can add values. Same for `reason`.
+</Note>
+
+## `onVerified` and partner attribution
+
+`onVerified` is the signal that your publishable key matched the page's origin. Partner
+branding and attribution only activate after it fires. The flow still works without it —
+just unbranded and unattributed — which makes a silent `onVerified` the single most useful
+thing to check when an integration "works but looks wrong". See
+[Troubleshooting](/web-sdk/troubleshooting#onverified-never-fires).
+
+## Callback precedence in React
+
+When the same callback is supplied at more than one level, **all** of them run, outermost
+first:
+
+```
+<CestoProvider onSuccess>  →  useCestoInvest({ onSuccess })  →  invest({ onSuccess })
+```
+
+That ordering is deliberate: put analytics on the provider so nothing is missed, and put
+UI state at the call site where the component that owns it lives.
+
+```tsx
+<CestoProvider apiKey={pk} onSuccess={(e) => analytics.track('invest', e)}>
+  <CestoInvestButton
+    basket="golden-age"
+    onSuccess={() => setJustInvested(true)}   // runs after the provider's
+  >
+    Invest
+  </CestoInvestButton>
+</CestoProvider>
+```
+
+## A worked example
+
+```ts
+cesto.invest({
+  basket: 'golden-age',
+  amountUsd: 100,
+
+  onReady: () => hideMySpinner(),
+
+  onVerified: ({ partner }) => console.debug('[cesto] verified for', partner),
+
+  onSuccess: ({ basket, amountUsd }) => {
+    analytics.track('cesto_invest_success', { basket, amountUsd });
+    showConfirmation(basket, amountUsd);
+  },
+
+  onScheduled: ({ scheduledFor }) => {
+    analytics.track('cesto_invest_scheduled');
+    showQueued(scheduledFor);
+  },
+
+  onError: ({ code, message }) => {
+    analytics.track('cesto_invest_error', { code });
+    showError('We couldn’t complete that invest.');
+    console.error('[cesto]', code, message);
+  },
+
+  onPositionClosed: ({ basket }) => refreshHoldings(basket),   // may fire repeatedly
+
+  onHandoff: () => showHint('Finish signing in in the new window.'),
+
+  // Dismissal only. Not success, not failure.
+  onClose: () => resetPendingState(),
+});
+```
+
+<Tip>
+  In React, `useCestoInvest()` already tracks the lifecycle for you — `status`, `isOpen`,
+  and `error` cover most of what you'd otherwise write by hand. See
+  [React](/web-sdk/react#usecestoinvest).
+</Tip>
+
+## Configuration errors
+
+If the loader can't be constructed at all — no key, a rejected `baseUrl`, or a non-browser
+environment — the React bindings fire `onError` with `code: 'config_error'` rather than
+throwing, and return an inert session. In plain JavaScript, `new Cesto(...)` throws at
+construction instead, which is where you want to find that mistake.
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Modes" icon="window-restore" href="/web-sdk/modes">
+    Why COOP can silence every callback in popup mode.
+  </Card>
+  <Card title="Troubleshooting" icon="wrench" href="/web-sdk/troubleshooting">
+    When events don't arrive.
+  </Card>
+</CardGroup>

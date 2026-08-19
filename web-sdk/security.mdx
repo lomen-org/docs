@@ -1,0 +1,137 @@
+---
+title: "Security"
+icon: "shield-check"
+description: "Why a key in your page source is safe, what the loader refuses to do, and what never crosses onto your origin."
+---
+
+The Web SDK puts a Cesto flow on someone else's page. This page is the honest account of
+what that means: what the publishable key can and can't do, what the loader will and won't
+talk to, and why your page can never tamper with what a user signs.
+
+## The loader is thin on purpose
+
+It holds **no tokens**, makes **no requests**, and stores **no state** beyond the currently
+open session. Everything sensitive — authentication, funding, signing, the invest itself —
+happens on the Cesto origin inside the dialog iframe or the popup window.
+
+No tokens, cookies, or user data ever pass through your page.
+
+## The publishable key
+
+`cesto_pk_…` is public by design, like a Stripe publishable key. It ships in your HTML,
+anyone can read it, and that is fine — because it grants nothing on its own:
+
+- **Partner branding and attribution** activate only after the backend validates the key
+  against **the origin the request came from** ([`onVerified`](/web-sdk/events)).
+- **Every invest** requires the end user's own Cesto session *plus* a per-action signed
+  challenge. A copied key cannot move anyone's money.
+- **Framing** is gated by the key: the invest page's `frame-ancestors` is computed from it,
+  so only your registered origins can frame the dialog. Someone who lifts your key onto
+  their own site gets an unframeable page.
+
+Full detail: [API keys](/developers/api-keys#publishable-keys-cestopk).
+
+<Warning>
+  A publishable key is not a weak secret key. It cannot read positions, cannot open or
+  close on anyone's behalf, and cannot reach any [Server SDK](/sdk/overview) route. Never
+  put a `cesto_sk_…` in client code to "save a round trip" — that is a different credential
+  with real power.
+</Warning>
+
+## Pinned message channel
+
+The loader accepts messages **only** from the exact window it opened — the dialog iframe's
+`contentWindow`, or the popup window — and **only** from the Cesto origin. It sends its
+init message to that explicit origin, never `'*'`.
+
+That closes the obvious embedding attacks: a sibling iframe on your page cannot pose as the
+dialog to hijack the session, and a page on another origin cannot inject events into your
+callbacks.
+
+The popup's window name also carries an unguessable random suffix per loader instance, so
+another script on your page cannot `window.open(evil, 'cesto-invest')` to take over an open
+popup by its name.
+
+## Origin lockdown on `baseUrl`
+
+`baseUrl` only accepts a **`cesto.co` origin over HTTPS** (or `localhost` / `127.0.0.1` for
+development). Anything else throws at construction.
+
+This matters most for the script-tag path: a `data-cesto-base-url` injected through a
+compromised CMS field can't reroute the flow — and with it, the user's wallet prompts — to
+an attacker-controlled origin. A rejected value logs
+`[Cesto] could not open the invest flow` and the button does nothing, rather than silently
+navigating somewhere.
+
+## The wallet relay
+
+In [dialog mode](/web-sdk/modes#wallet-login-in-dialog-mode) the invest app cannot reach
+browser wallet extensions itself — extensions don't inject providers into cross-origin
+iframes — so it asks the SDK, running top-level on your page, to relay four things:
+
+1. Detect installed wallet providers.
+2. Request a connection.
+3. Request a signature over a login challenge.
+4. Request a signature over a transaction **the app composed**.
+
+The relay can never *originate* a request. The app verifies that the returned transaction's
+serialized message is **byte-identical** to what it sent, so your page can only add
+signatures — never alter what is being signed, the amounts, or the destination.
+
+No keys or secrets pass through your page. What the user sees is their wallet's own
+approval prompt, anchored to your origin, over a transaction Cesto built.
+
+## Why the iframe has no `sandbox` attribute
+
+Deliberate. The dialog frames the trusted Cesto origin, and OAuth login popups opened from
+inside it have to work. The protection is on the server side instead: the invest page only
+allows framing (`frame-ancestors`) for origins on the key's allowlist, so the frame can
+only ever be created by a site you registered.
+
+## Protocol versioning
+
+Every message between the loader and the app is a versioned envelope
+(`{ cesto: 1, type, payload }`). Unknown versions and unknown message types are **dropped,
+never errored**, so an older loader cannot be broken by a newer app, or vice versa.
+
+Practically: pin the SDK version you ship, and expect forward compatibility rather than
+relying on it.
+
+## What you should do on your side
+
+<Steps>
+  <Step title="Register exactly the origins you use">
+    Including staging and preview deployments. Unregistered origins run unbranded and can't
+    frame the dialog.
+  </Step>
+  <Step title="Serve the embedding page over HTTPS">
+    Wallet prompts and OAuth flows on your origin deserve the same protection as the Cesto
+    origin has.
+  </Step>
+  <Step title="Pin a version in the CDN URL">
+    `@cesto/web-sdk@0.1.0` rather than a floating tag, so a release can't change the flow
+    on a page you aren't watching.
+  </Step>
+  <Step title="Don't treat onClose as an outcome">
+    It is not an authorization signal and not a confirmation. Only `onSuccess` means an
+    invest completed — and even then, verify server-side before granting anything of value
+    on your side.
+  </Step>
+</Steps>
+
+<Warning>
+  Callbacks are client-side signals for **UI**, not for accounting. Anything that must be
+  trustworthy — crediting a reward, unlocking a feature, recording a referral payout —
+  should be confirmed against your own backend, not against `onSuccess` alone.
+</Warning>
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="API keys" icon="key" href="/developers/api-keys">
+    Publishable vs secret, scopes, and the origin allowlist.
+  </Card>
+  <Card title="Cesto security" icon="lock" href="/cesto/security">
+    How custody, signing, and execution work in the product itself.
+  </Card>
+</CardGroup>

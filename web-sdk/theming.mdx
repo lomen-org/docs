@@ -1,0 +1,165 @@
+---
+title: "Theming"
+icon: "palette"
+description: "Eight tokens that make the Cesto dialog — and the bundled button — look like part of your site."
+---
+
+The invest dialog can be themed to match your site. Pass a `theme` object per call, or set
+a default on the constructor or provider; per-call values override the default **field by
+field**.
+
+<CodeGroup>
+```ts JavaScript
+const cesto = new Cesto({
+  apiKey: 'cesto_pk_your_key',
+  theme: { scheme: 'dark' },        // default for every invest() from this instance
+});
+
+cesto.invest({
+  basket: 'golden-age',
+  theme: {
+    accent: '#00CC55',              // CTA fill and highlights
+    background: '#091313',          // dialog / card surface
+    foreground: '#fdfdfd',          // primary text
+    muted: '#1a2924',               // inset / secondary surface
+    mutedForeground: '#939796',     // secondary text
+    border: '#0c1a18',              // dividers and borders
+    radius: '12px',                 // corner radius (CSS length)
+    scheme: 'dark',                 // 'dark' | 'light' | 'auto'
+  },
+});
+```
+
+```tsx React
+<CestoProvider
+  apiKey="cesto_pk_your_key"
+  theme={{ accent: '#00CC55', background: '#091313', radius: '12px', scheme: 'dark' }}
+>
+  {/* per-button overrides merge over the provider's theme */}
+  <CestoInvestButton basket="golden-age" theme={{ radius: '4px' }}>
+    Invest
+  </CestoInvestButton>
+</CestoProvider>
+```
+
+```html Script tag
+<button
+  data-cesto-invest="golden-age"
+  data-cesto-pk="cesto_pk_your_key"
+  data-cesto-accent="#00CC55"
+  data-cesto-background="#091313"
+  data-cesto-radius="12px"
+  data-cesto-scheme="dark"
+>
+  INVEST NOW
+</button>
+```
+</CodeGroup>
+
+## The tokens
+
+| Field | Meaning | Format |
+| --- | --- | --- |
+| `accent` | CTA fill and highlights | `#rrggbb` |
+| `background` | Dialog and card surface. Also derives the surface ramp | `#rrggbb` |
+| `foreground` | Primary text. Also derives the muted text ramp | `#rrggbb` |
+| `muted` | Inset / secondary surface | `#rrggbb` |
+| `mutedForeground` | Secondary text | `#rrggbb` |
+| `border` | Dividers and borders | `#rrggbb` |
+| `radius` | Corner radius of the dialog and its controls | CSS length, capped at `32px` / `2rem` |
+| `scheme` | Color scheme of the dialog | `dark`, `light`, or `auto` |
+
+Every field is optional. **Setting just `accent` and `background` gets you most of the way**
+— the app derives the surface and text ramps from them.
+
+<Warning>
+  Only `#rrggbb` is accepted. Shorthand `#rgb`, `rgb()`, `hsl()`, and named colors are
+  **not**.
+</Warning>
+
+## Bad values fail safe
+
+Each field validates independently, server-side, inside the invest app. Anything invalid
+silently falls back to the Cesto default, so a bad value can never render an unreadable
+dialog — you get a Cesto-themed dialog rather than a broken one.
+
+This also means the SDK does **not** validate what you pass: values are serialized onto the
+invest URL as query params and judged at the other end. If a token seems to be ignored,
+check the format before checking the wiring.
+
+## Data attributes
+
+Every field has a `data-cesto-*` equivalent on the `[data-cesto-invest]` element, which
+overrides the theme passed to `bindInvestButtons` field by field:
+
+| Field | Attribute |
+| --- | --- |
+| `accent` | `data-cesto-accent` |
+| `background` | `data-cesto-background` |
+| `foreground` | `data-cesto-foreground` |
+| `muted` | `data-cesto-muted` |
+| `mutedForeground` | `data-cesto-muted-foreground` |
+| `border` | `data-cesto-border` |
+| `radius` | `data-cesto-radius` |
+| `scheme` | `data-cesto-scheme` |
+
+Because the theme travels on the URL, it applies in [popup mode](/web-sdk/modes) too — it
+is the same page.
+
+## The bundled button
+
+`<CestoInvestButton>` reads the **same** resolved theme, so the CTA and the dialog it opens
+can't disagree. Three tokens reach it:
+
+- `accent` — the fill, border, and focus ring.
+- Its paired text ink, computed from the accent's luminance so the label stays readable on
+  any fill you choose.
+- `radius` — the button's corners.
+
+Everything else is inherited from your page, including `font-family` — the button adopts
+**your** typography rather than shipping Cesto's.
+
+```tsx
+// One theme, both surfaces.
+<CestoProvider apiKey="cesto_pk_your_key" theme={{ accent: '#7c7cf0', radius: '4px' }}>
+  <CestoInvestButton basket="golden-age" variant="outline">Invest</CestoInvestButton>
+</CestoProvider>
+```
+
+To style the button entirely yourself, use `unstyled` or `asChild` — see
+[React](/web-sdk/react#using-your-own-design-system).
+
+## Matching your design tokens
+
+If your site already has CSS custom properties, read them off the page and pass them
+straight in:
+
+```ts
+const css = getComputedStyle(document.documentElement);
+const theme = {
+  accent: css.getPropertyValue('--brand-500').trim(),
+  background: css.getPropertyValue('--surface').trim(),
+  foreground: css.getPropertyValue('--text').trim(),
+  radius: css.getPropertyValue('--radius-md').trim(),
+};
+```
+
+Make sure the resolved values are `#rrggbb` — a token defined as `oklch()` or `rgb()` will
+be dropped in favour of the Cesto default.
+
+<Tip>
+  Following a light/dark toggle on your page? Pass `scheme: 'auto'` to let the dialog
+  follow the user's OS preference, or pass your current mode explicitly and let the theme
+  re-resolve on the next `invest()` call. The theme is read when the flow opens, not live.
+</Tip>
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Widgets theming" icon="shapes" href="/widgets/usage#theming">
+    The widget iframes take a larger token set, including fonts and spacing.
+  </Card>
+  <Card title="React button" icon="react" href="/web-sdk/react#usecestoinvest">
+    Variants, sizes, `unstyled`, and `asChild`.
+  </Card>
+</CardGroup>

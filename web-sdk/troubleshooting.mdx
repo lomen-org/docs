@@ -1,0 +1,175 @@
+---
+title: "Troubleshooting"
+icon: "wrench"
+description: "Popup blockers, COOP, CSP, silent verification, and testing against a local invest app."
+---
+
+## The button does nothing
+
+Check the console first — the loader logs rather than throws on the declarative path.
+
+| Console message | Cause | Fix |
+| --- | --- | --- |
+| `[Cesto] data-cesto-invest element is missing a basket slug or a publishable key` | No `data-cesto-invest`, or no key on the element and none in `bindInvestButtons({ apiKey })` | Add the missing attribute |
+| `[Cesto] could not open the invest flow` | Almost always a rejected `data-cesto-base-url` | Use a `cesto.co` origin, or `localhost` in development |
+| `[Cesto] apiKey is required` (thrown) | `new Cesto({})` with no key | Pass the publishable key |
+| `[Cesto] baseUrl must be a cesto.co origin…` (thrown) | `baseUrl` points somewhere else | See [origin lockdown](/web-sdk/security#origin-lockdown-on-baseurl) |
+
+Nothing in the console at all? The element was probably never bound. `bindInvestButtons`
+runs on `DOMContentLoaded` and binds each element once — if your button is rendered
+afterwards, call `window.Cesto.bindInvestButtons({ apiKey })` again. It's idempotent and
+returns the number of elements newly bound.
+
+## The popup was blocked
+
+`invest()` opens a window synchronously on the popup path. Browsers only allow that inside
+a user gesture, so this breaks it:
+
+```ts
+// ❌ the await breaks the gesture chain
+button.addEventListener('click', async () => {
+  await validate();
+  cesto.invest({ basket: 'golden-age' });
+});
+```
+
+```ts
+// ✅ validate first, or validate inside onClick and preventDefault
+button.addEventListener('click', () => {
+  if (!isValid()) return;
+  cesto.invest({ basket: 'golden-age' });
+});
+```
+
+<Warning>
+  This applies **even in dialog mode**. The dialog can fall back to a popup, and once the
+  fallback is latched for the tab, the next `invest()` opens a window directly. Never put
+  an `await` or a timer between the click and the call.
+</Warning>
+
+If it's blocked anyway, the loader falls back to a full-page navigation to the invest URL —
+the flow completes, but the SDK can't observe the outcome and the visitor isn't returned to
+your page. See [Modes](/web-sdk/modes#when-the-popup-is-blocked).
+
+## Callbacks never fire (popup mode)
+
+Check for `Cross-Origin-Opener-Policy: same-origin` on the embedding page. It severs
+`window.opener`, so the invest completes but nothing reports back.
+
+Serve the page with `same-origin-allow-popups` (or no COOP header), or switch to dialog
+mode, which is unaffected. Details: [COOP and popup mode](/web-sdk/modes#coop-and-popup-mode).
+
+## `onVerified` never fires
+
+The origin isn't on your key's allowlist. The flow still works — it's just **unbranded and
+unattributed**, which is usually what someone means when they say "it works but it looks
+wrong".
+
+Two things to check:
+
+1. The exact origin, including scheme, host, and port. `https://www.example.com` and
+   `https://example.com` are different origins.
+2. Preview and staging deployments — a Vercel preview URL changes per deployment and won't
+   be on the list.
+
+Ask the Cesto team to add the origins you need. See [API keys](/developers/api-keys#the-origin-allowlist).
+
+## The dialog never appears
+
+The overlay swaps to a **"Continue in new window"** panel after 20 seconds if the iframe
+doesn't become ready. Common causes: a privacy extension blocking third-party frames, a
+network failure, or a browser that won't frame the app.
+
+The failure is remembered for the rest of the tab session (`sessionStorage` key
+`cesto-invest:force-popup`), so later calls go straight to popup mode. Clear the tab's
+session storage — or open a new tab — while debugging, or you'll keep testing the popup
+path by accident.
+
+## The button renders unstyled (React)
+
+A strict `style-src` without `'unsafe-inline'` blocks the runtime stylesheet injection.
+Import the stylesheet and mark the document instead:
+
+```tsx
+import '@cesto/react/styles.css';
+```
+
+```html
+<html data-cesto-invest-button-external>
+```
+
+See [React → Strict CSP](/web-sdk/react#strict-csp).
+
+## The theme is ignored
+
+Values are validated **server-side, field by field**, and anything invalid silently falls
+back to the Cesto default. Check the format before the wiring:
+
+- Colors must be `#rrggbb`. Not `#rgb`, not `rgb()`, not `oklch()`, not `rebeccapurple`.
+- `radius` must be a CSS length, and is capped at `32px` / `2rem`.
+- `scheme` must be exactly `dark`, `light`, or `auto`.
+
+Reading tokens off your own stylesheet is a common trap — a design token defined in `oklch`
+resolves to `oklch(...)` and gets dropped. See [Theming](/web-sdk/theming#matching-your-design-tokens).
+
+## The user is asked to sign in again
+
+Expected in dialog mode. The iframe runs with **partitioned storage**, so a session on
+`app.cesto.co` is invisible inside the frame. It is a browser guarantee, not something the
+SDK can opt out of. Popup mode shares the app session.
+
+## A wallet prompt appears over my site
+
+Also expected, and also dialog mode. Wallet extensions don't inject providers into
+cross-origin iframes, so the SDK relays detect / connect / sign requests from the frame on
+your top-level page. Your page can only add signatures — it can never alter what is being
+signed. See [the wallet relay](/web-sdk/security#the-wallet-relay).
+
+## `onClose` fired — did the invest fail?
+
+No. `onClose` means the *surface* was dismissed. It also fires after a success. Only
+`onError` means the invest failed, and only `onPositionClosed` means a position was closed.
+See [Events](/web-sdk/events#the-ones-that-mean-something-happened).
+
+## Server-side rendering errors
+
+`@cesto/react` is client-only and ships a `'use client'` banner, so importing it from a
+server component is fine — but the callbacks you pass are functions and cannot cross the
+server boundary. Move any component that passes callbacks into a `'use client'` file. See
+[Next.js App Router](/web-sdk/react#nextjs-app-router).
+
+In a non-browser environment the React bindings fire `onError` with `code: 'config_error'`
+rather than throwing.
+
+## Testing against a local app
+
+<Steps>
+  <Step title="Run the Cesto app locally">
+    On `http://localhost:3000`.
+  </Step>
+  <Step title="Point the loader at it">
+    `new Cesto({ apiKey, baseUrl: 'http://localhost:3000' })`, or
+    `data-cesto-base-url="http://localhost:3000"` on the button.
+  </Step>
+  <Step title="Serve your test page from an allowlisted origin">
+    For example `http://localhost:8787`. The origin has to be on the key's allowlist or
+    verification won't fire.
+  </Step>
+  <Step title="Watch the events">
+    `onReady` (frame or popup booted), then `onVerified` once the backend validates the key
+    and origin, then the invest lifecycle events.
+  </Step>
+</Steps>
+
+<Warning>
+  Two ports on `localhost` are the **same site** to the browser, so the dialog iframe is
+  never treated as third-party locally. Storage partitioning and the framing rules that
+  come with it will not reproduce — test those on a real cross-site origin before you
+  conclude they work.
+</Warning>
+
+## Still stuck?
+
+Reach out on the [Cesto community channel](https://t.me/cesto_co) with your publishable
+key's partner name, the origin you're embedding from, the mode, and anything the console
+logged.

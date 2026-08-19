@@ -2,7 +2,7 @@
   "$schema": "https://mintlify.com/docs.json",
   "theme": "mint",
   "name": "Cesto",
-  "description": "Invest in narrative-driven baskets of assets on Solana. Docs for the Cesto product, the Cesto SDK, the Cesto Toolkit agent skill, and embeddable basket widgets.",
+  "description": "Invest in narrative-driven baskets of assets on Solana. Docs for the Cesto product, the Cesto Web SDK and Server SDK, embeddable basket widgets, and the Cesto Toolkit agent skill.",
   "colors": {
     "primary": "#16A34A",
     "light": "#16A34A",
@@ -65,29 +65,13 @@
         "icon": "code",
         "groups": [
           {
-            "group": "Cesto SDK",
+            "group": "Get started",
             "pages": [
-              "sdk/overview",
-              "sdk/integration-models",
-              "sdk/authentication",
-              "sdk/configuration",
-              "sdk/products",
-              "sdk/positions",
-              "sdk/managed-wallets",
-              "sdk/open-position",
-              "sdk/close-position",
-              "sdk/rebalance-position",
-              "sdk/bridging",
-              "sdk/errors",
-              "sdk/examples"
+              "developers/overview",
+              "developers/choose-an-integration",
+              "developers/api-keys"
             ]
-          }
-        ]
-      },
-      {
-        "tab": "Widgets",
-        "icon": "shapes",
-        "groups": [
+          },
           {
             "group": "Widgets",
             "pages": [
@@ -95,12 +79,64 @@
               "widgets/usage",
               "widgets/playground"
             ]
+          },
+          {
+            "group": "Web SDK",
+            "pages": [
+              "web-sdk/overview",
+              "web-sdk/quickstart",
+              "web-sdk/script-tag",
+              "web-sdk/javascript",
+              "web-sdk/react",
+              "web-sdk/modes",
+              "web-sdk/theming",
+              "web-sdk/events",
+              "web-sdk/security",
+              "web-sdk/troubleshooting"
+            ]
+          },
+          {
+            "group": "Server SDK",
+            "pages": [
+              "sdk/overview",
+              "sdk/integration-models",
+              "sdk/authentication",
+              "sdk/configuration",
+              "sdk/products",
+              "sdk/positions",
+              "sdk/fees",
+              "sdk/users",
+              "sdk/managed-wallets",
+              "sdk/open-position",
+              "sdk/close-position",
+              "sdk/rebalance-position",
+              "sdk/bridging",
+              "sdk/browser-client",
+              "sdk/errors",
+              "sdk/examples"
+            ]
           }
         ]
       }
     ]
   },
   "redirects": [
+    {
+      "source": "/developers",
+      "destination": "/developers/overview"
+    },
+    {
+      "source": "/web-sdk",
+      "destination": "/web-sdk/overview"
+    },
+    {
+      "source": "/sdk",
+      "destination": "/sdk/overview"
+    },
+    {
+      "source": "/widgets",
+      "destination": "/widgets/overview"
+    },
     {
       "source": "/plugins",
       "destination": "/widgets/overview"
@@ -129,9 +165,9 @@
   "navbar": {
     "links": [
       {
-        "label": "SDK",
+        "label": "Developers",
         "icon": "code",
-        "href": "https://docs.cesto.co/sdk/overview"
+        "href": "https://docs.cesto.co/developers/overview"
       }
     ],
     "primary": {
