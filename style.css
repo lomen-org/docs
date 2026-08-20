@@ -19,10 +19,10 @@
 }
 
 
-/* Widget playground page: widen the content column so the embedded playground
-   and the page text use the available space instead of sitting in the narrow
-   reading column. Scoped to the playground page via the .cesto-pg-page marker
-   that page renders, so no other page is affected.
+/* Playground pages (widgets and web SDK): widen the content column so the
+   embedded playground and the page text use the available space instead of
+   sitting in the narrow reading column. Scoped via the .cesto-pg-page marker
+   those pages render, so no other page is affected.
 
    This is done by widening the *column* (not by breaking the iframe out with
    viewport math), which keeps the page fully responsive — text and iframe
