@@ -85,6 +85,7 @@
             "pages": [
               "web-sdk/overview",
               "web-sdk/quickstart",
+              "web-sdk/playground",
               "web-sdk/script-tag",
               "web-sdk/javascript",
               "web-sdk/react",
