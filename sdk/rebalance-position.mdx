@@ -269,6 +269,11 @@ Returns the availability preview: `{ available, reason?, currentVersionId?, targ
 currentVersionLabel?, targetVersionLabel?, tokensToSell, tokensToBuy, tokensUnchanged,
 positions, totalInvested, estimatedPlatformFee, eligible, eligibilityErrors?, ineligibleReason? }`.
 
+`estimatedPlatformFee` is in the basket's **input-token base units** (micro-USDC for a USDC
+basket), charged on the value the rebalance would MOVE rather than on the whole position —
+so correcting a small drift on a large position costs little. Treat it as a preview: the
+amount actually charged is computed from realised turnover at execution time.
+
 ## Rebalance history
 
 `rebalance.getHistory` lists the wallet's past rebalances of the basket — each version move,

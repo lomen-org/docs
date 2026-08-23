@@ -32,6 +32,22 @@ fees.open.totalRequired;         // the three summed — what the user must fund
 All USDC amounts are **micro-USDC integers** (1 USDC = 1,000,000). Percentages are plain
 percents (`0.25` means 0.25%), and rates in basis points are bps (`10` means 0.1%).
 
+## Your rate
+
+The platform fee can be set per integration. When you call with your API key, the
+breakdown is priced at **your** rate — so what you preview is what you are charged.
+Called without a key (the [browser client](/sdk/browser-client)), it returns the
+standard rate instead.
+
+Your rate is agreed with Cesto and configured on our side; there is no API to change
+it, and nothing you send can affect it. If you have not agreed a specific rate, the
+standard one applies and you need do nothing.
+
+<Note>
+  Price with the key you will transact with. A preview fetched anonymously — or with a
+  different integration's key — can quote a different fee than the one you are billed.
+</Note>
+
 ## Parameters
 
 <ParamField path="product" type="string" required>
