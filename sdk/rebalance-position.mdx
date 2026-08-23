@@ -6,10 +6,18 @@ description: "Migrate a wallet's position to the basket's latest version — one
 
 Baskets are **versioned** — a creator can publish a new version that changes the token mix.
 Rebalancing migrates a wallet's position from the version it currently holds to the basket's
-**latest version** by swapping the old basket tokens **directly** into the new ones (e.g.
-`NVDAon → QQQon`) — not selling to USDC and rebuying. In the BYOW model it is
-**self-custody** — the user's wallet signs every transaction and Cesto never holds the key;
-in the managed model Cesto signs server-side.
+**latest version**. Both models converge on the same target — the latest version's
+allocations, measured against what the position **actually holds today** rather than what it
+held at open — but they get there differently:
+
+- **BYOW** swaps the old basket tokens **directly** into the new ones (e.g. `NVDAon → QQQon`)
+  in a single batch, because the user signs every transaction up front. It is
+  **self-custody** — Cesto never holds the key.
+- **Managed** runs the migration in two server-signed phases: sell the old tokens to USDC,
+  then buy the new ones from those proceeds. Only the sell proceeds are spent, so no other
+  USDC in the wallet is touched.
+
+The route differs; the resulting allocation does not.
 
 <Tabs>
   <Tab title="Managed (recommended)">
